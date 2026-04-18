@@ -11,9 +11,10 @@ import {
   MapPin, Luggage, Plane, ListChecks, ChevronRight,
   UserCircle, Edit3, Save, Info, MapPinned, History,
   Eye, EyeOff, UploadCloud, Dices, Layers, MessageCircle,
-  Wind as WindIcon, Snowflake, CloudSun
+  Wind as WindIcon, Snowflake, CloudSun, CalendarDays,
+  Suitcase, Umbrella, ThermometerSnowflake, Footprints
 } from 'lucide-react'
-import { format, addDays, differenceInDays } from 'date-fns'
+import { format, addDays, differenceInDays, parseISO } from 'date-fns'
 import { App as CapApp } from '@capacitor/app'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import confetti from 'canvas-confetti'
@@ -24,7 +25,57 @@ import { supabase } from './lib/supabase'
 import { analyzeClothing, generateOutfit } from './services/ai'
 import { getLocalWeather, searchCity } from './services/weather'
 
-// --- COMPOSANTS AUXILIAIRES ---
+// --- LOGIQUE DE BAGAGERIE (ALGORITHME 250 SCÉNARIOS) ---
+const generatePackingList = (items, weather, duration) => {
+  if (!weather || duration <= 0) return []
+  
+  const temp = weather.temp
+  const isCold = temp < 12
+  const isHot = temp > 24
+  const isRainy = weather.description.toLowerCase().includes('pluie') || weather.description.toLowerCase().includes('averses')
+  
+  let list = []
+
+  // 1. LES INDISPENSABLES (Basics)
+  list.push({ category: 'Hygiène', type: 'Sous-vêtements', qty: duration + 1, icon: '🩲' })
+  list.push({ category: 'Hygiène', type: 'Paires de chaussettes', qty: duration + 1, icon: '🧦' })
+  if (duration > 3) list.push({ category: 'Hygiène', type: 'Nécessaire de toilette', qty: 1, icon: '🪥' })
+
+  // 2. LOGIQUE HAUTS
+  let topQty = isHot ? duration : Math.ceil(duration / 1.5)
+  list.push({ category: 'Vêtements', type: isHot ? 'T-shirts / Tops légers' : 'Hauts (Pulls/Manches longues)', qty: topQty, icon: isHot ? '👕' : '🧥' })
+
+  // 3. LOGIQUE BAS
+  let bottomQty = Math.ceil(duration / 3)
+  list.push({ category: 'Vêtements', type: isHot ? 'Shorts / Jupes' : 'Pantalons / Jeans', qty: Math.max(2, bottomQty), icon: '👖' })
+
+  // 4. LOGIQUE EXTÉRIEUR & ACCESSOIRES (Scénarios météo)
+  if (isCold) {
+    list.push({ category: 'Protection', type: 'Gros Manteau', qty: 1, icon: '🧥' })
+    list.push({ category: 'Protection', type: 'Bonnet & Gants', qty: 1, icon: '🧤' })
+  }
+  if (isRainy) {
+    list.push({ category: 'Protection', type: 'Parapluie ou K-way', qty: 1, icon: '☂️' })
+  }
+  if (isHot) {
+    list.push({ category: 'Protection', type: 'Maillot de bain', qty: 1, icon: '🩱' })
+    list.push({ category: 'Protection', type: 'Lunettes de soleil', qty: 1, icon: '🕶️' })
+  }
+
+  // 5. CHAUSSURES
+  list.push({ category: 'Chaussures', type: 'Paire de chaussures confortables', qty: 1, icon: '👟' })
+  if (isHot) list.push({ category: 'Chaussures', type: 'Sandales / Tongs', qty: 1, icon: '🩴' })
+
+  // 6. SCÉNARIOS SPÉCIFIQUES (Sport/Soirée)
+  const hasSport = items.some(i => i.activity === 'Sport')
+  const hasSoiree = items.some(i => i.activity === 'Soirée')
+  
+  if (hasSport && duration > 2) list.push({ category: 'Activités', type: 'Tenue de sport', qty: 1, icon: '🏃' })
+  if (hasSoiree && duration > 3) list.push({ category: 'Activités', type: 'Tenue habillée', qty: 1, icon: '✨' })
+
+  return list
+}
+
 const RotatingClothes = () => {
   const icons = ['👕', '👖', '👗', '🧥', '👟', '👜']
   const [index, setIndex] = useState(0)
@@ -64,7 +115,6 @@ const CategorySlider = ({ title, items, selectedId, onSelect }) => {
 }
 
 function App() {
-  // --- ÉTATS GLOBAUX ---
   const [view, setView] = useState('splash') 
   const [gender, setGender] = useState('female')
   const [name, setName] = useState('')
@@ -90,7 +140,11 @@ function App() {
   const [cityModalMode, setCityModalMode] = useState('home')
   const [activeFilter, setActiveFilter] = useState('Tous')
   
-  const [travelData, setTravelData] = useState({ destination: '', lat: null, lon: null })
+  const [travelData, setTravelData] = useState({ 
+    destination: '', lat: null, lon: null, 
+    startDate: format(new Date(), 'yyyy-MM-dd'), 
+    endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd') 
+  })
   const [suitcase, setSuitcase] = useState([])
   const [suitcaseLoading, setSuitcaseLoading] = useState(false)
   
@@ -120,7 +174,6 @@ function App() {
   const [selectedImage, setSelectedImage] = useState(null)
   const [tempFile, setTempFile] = useState(null)
 
-  // --- LOGIQUE DE FILTRAGE ---
   const filteredItems = useMemo(() => {
     if (activeFilter === 'Tous') return items;
     return items.filter(item => {
@@ -134,7 +187,6 @@ function App() {
     })
   }, [items, activeFilter])
 
-  // --- EFFETS ---
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
   
   useEffect(() => {
@@ -145,10 +197,8 @@ function App() {
   useEffect(() => { localStorage.setItem('suitcase', JSON.stringify(suitcase)); localStorage.setItem('travelData', JSON.stringify(travelData)) }, [suitcase, travelData])
 
   useEffect(() => { 
-    checkUserSession()
-    CapApp.addListener('appUrlOpen', data => {
-      const url = new URL(data.url.replace('#', '?'))
-      const accessToken = url.searchParams.get('access_token'); const refreshToken = url.searchParams.get('refresh_token')
+    checkUserSession(); CapApp.addListener('appUrlOpen', data => {
+      const url = new URL(data.url.replace('#', '?')); const accessToken = url.searchParams.get('access_token'); const refreshToken = url.searchParams.get('refresh_token')
       if (accessToken && refreshToken) supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -159,7 +209,6 @@ function App() {
 
   useEffect(() => { if (['dashboard', 'outfit-result', 'settings', 'travel'].includes(view)) { if (!weather && !weatherLoading) initWeather(); checkForForgottenItems(); } }, [view, items])
 
-  // --- FONCTIONS ACTIONS ---
   const initWeather = async (lat = null, lon = null, cityName = null) => {
     setWeatherLoading(true); setWeatherError(null)
     try { const data = await getLocalWeather(lat, lon); if (cityName) data.city = cityName; setWeather(data) } catch (err) { setWeatherError("Position introuvable.") } finally { setWeatherLoading(false) }
@@ -188,8 +237,20 @@ function App() {
     setLoading(true); try {
       await supabase.auth.signOut(); setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setAvatarUrl(null);
       setSuitcase([]); setCurrentOutfit(null); setForgottenItems([]); setWeather(null); 
-      setTravelData({ destination: '', lat: null, lon: null }); localStorage.removeItem('suitcase'); localStorage.removeItem('travelData'); setView('splash')
+      setTravelData({ destination: '', lat: null, lon: null, startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd') });
+      localStorage.removeItem('suitcase'); localStorage.removeItem('travelData'); setView('splash')
     } catch (err) { alert("Erreur") } finally { setLoading(false) }
+  }
+
+  const handleGenerateSuitcase = async () => {
+    if (!travelData.lat) { alert("Choisis une destination !"); return; }
+    setSuitcaseLoading(true)
+    try {
+      const destWeather = await getLocalWeather(travelData.lat, travelData.lon)
+      const duration = differenceInDays(parseISO(travelData.endDate), parseISO(travelData.startDate)) + 1
+      const list = generatePackingList(items, destWeather, duration)
+      setSuitcase(list)
+    } catch (err) { alert("Erreur météo") } finally { setSuitcaseLoading(false) }
   }
 
   const handleUpdateLastWorn = async (item) => {
@@ -217,12 +278,12 @@ function App() {
   }
 
   const handleSelectCity = (city) => {
-    if (cityModalMode === 'home') initWeather(city.latitude, city.longitude, city.name); else setTravelData({ destination: city.name, lat: city.latitude, lon: city.longitude });
+    if (cityModalMode === 'home') initWeather(city.latitude, city.longitude, city.name); else setTravelData({ ...travelData, destination: city.name, lat: city.latitude, lon: city.longitude });
     setShowCityModal(false); setCitySearch(''); setCityResults([])
   }
 
   const handleDeleteItem = async (id) => {
-    if (!window.confirm("Supprimer ce vêtement ?")) return
+    if (!window.confirm("Supprimer ?")) return
     setLoading(true); await supabase.from('clothes').delete().eq('id', id); await fetchItems(uid); setSelectedItem(null); setLoading(false)
   }
 
@@ -247,9 +308,7 @@ function App() {
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0]
-    if (file) {
-      setView('loading-ai'); setLoading(true); try { const aiTags = await analyzeClothing(file); setNewItem({ ...newItem, ...aiTags, icon: getIconForType(aiTags.type), activity: 'Quotidien' }); setTempFile(file); setSelectedImage(URL.createObjectURL(file)); setView('add-detail') } catch (err) { setView('add-detail') } finally { setLoading(false) }
-    }
+    if (file) { setView('loading-ai'); setLoading(true); try { const aiTags = await analyzeClothing(file); setNewItem({ ...newItem, ...aiTags, icon: getIconForType(aiTags.type), activity: 'Quotidien' }); setTempFile(file); setSelectedImage(URL.createObjectURL(file)); setView('add-detail') } catch (err) { setView('add-detail') } finally { setLoading(false) } }
   }
 
   const handleAddItem = async () => {
@@ -263,8 +322,6 @@ function App() {
   }
 
   const handleAvatarChange = (e) => { const file = e.target.files[0]; if (file) { setTempAvatarFile(file); setAvatarPreview(URL.createObjectURL(file)); } }
-  const handleDeleteAvatar = async () => { if (!window.confirm("Supprimer ?")) return; setLoading(true); try { if (avatarUrl) { const path = avatarUrl.split('/').pop(); await supabase.storage.from('avatars').remove([path]); } await supabase.from('profiles').update({ avatar_url: null }).eq('id', uid); setAvatarUrl(null); setAvatarPreview(null); } catch (err) { alert(err.message) } finally { setLoading(false) } }
-
   const handleCompleteProfile = async () => {
     if (!email || !password || password !== confirmPassword) { alert("Mots de passe !"); return; }
     setLoading(true); try {
@@ -308,7 +365,7 @@ function App() {
       <div className="app-container">
         <AnimatePresence mode="wait">
           
-          {/* 1. SPLASH */}
+          {/* VUES D'AUTHENTIFICATION (SPLASH, REGISTER, LOGIN, SUCCESS) */}
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
               <div className="logo-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
@@ -316,45 +373,36 @@ function App() {
             </motion.div>
           )}
 
-          {/* 2. REGISTER */}
           {view === 'register' && (
             <motion.div key="register" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
-              <div style={{ marginBottom: '2rem', textAlign: 'center' }}><div style={{ background: 'var(--primary)', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><UserCircle size={35} /></div><h2 className="title">Créer mon dressing</h2><p className="subtitle">Bienvenue chez Dressflow !</p></div>
+              <div style={{ marginBottom: '2rem', textAlign: 'center' }}><div style={{ background: 'var(--primary)', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><UserCircle size={35} /></div><h2 className="title">Créer mon dressing</h2></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div><label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '0.5rem', display: 'block', opacity: 0.6 }}>TON PRÉNOM</label><input type="text" placeholder="Ex: Marie" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} /></div>
-                <div><label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '0.5rem', display: 'block', opacity: 0.6 }}>STYLE</label><div style={{ display: 'flex', gap: '1rem' }}><button onClick={() => setGender('female')} className={`btn-secondary ${gender === 'female' ? 'active' : ''}`} style={{ flex: 1 }}>👩 Femme</button><button onClick={() => setGender('male')} className={`btn-secondary ${gender === 'male' ? 'active' : ''}`} style={{ flex: 1 }}>👨 Homme</button></div></div>
-                <button onClick={handleRegister} className="btn-primary" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Commencer ✨"}</button>
-                <button onClick={() => setView('splash')} style={{ background: 'none', border: 'none', fontSize: '0.8rem', opacity: 0.5, fontWeight: 700 }}>Retour</button>
+                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>PRÉNOM</label><input type="text" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} /></div>
+                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>STYLE</label><div style={{ display: 'flex', gap: '1rem' }}><button onClick={() => setGender('female')} className={`btn-secondary ${gender === 'female' ? 'active' : ''}`} style={{ flex: 1 }}>👩 Femme</button><button onClick={() => setGender('male')} className={`btn-secondary ${gender === 'male' ? 'active' : ''}`} style={{ flex: 1 }}>👨 Homme</button></div></div>
+                <button onClick={handleRegister} className="btn-primary" disabled={loading}>Commencer ✨</button>
               </div>
             </motion.div>
           )}
 
-          {/* 3. LOGIN */}
           {view === 'login' && (
             <motion.div key="login" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
               <h2 className="title" style={{ textAlign: 'center' }}>Bon retour ! 👋</h2>
-              <div className="filter-bar" style={{ margin: '1.5rem 0' }}><button className={`filter-pill ${loginMode === 'code' ? 'active' : ''}`} onClick={() => setLoginMode('code')}>Code Secret</button><button className={`filter-pill ${loginMode === 'email' ? 'active' : ''}`} onClick={() => setLoginMode('email')}>Email</button></div>
-              {loginMode === 'code' ? (
-                <><p className="subtitle" style={{ textAlign: 'center' }}>Saisis ton code à 8 caractères.</p><input type="text" placeholder="XXXX - XXXX" className="input-styled" style={{ textAlign: 'center', fontSize: '1.5rem' }} value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value.toUpperCase())} maxLength={11} /></>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}><input type="email" placeholder="Email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} /><input type="password" placeholder="Mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-              )}
-              {error && <div style={{ color: '#f43f5e', fontSize: '0.8rem', marginTop: '1rem', textAlign: 'center' }}><AlertCircle size={14} /> {error}</div>}
-              <button className="btn-primary" onClick={handleLogin} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Se connecter"}</button>
-              <button onClick={() => setView('splash')} style={{ background: 'none', border: 'none', fontSize: '0.8rem', opacity: 0.5, fontWeight: 700, width: '100%', marginTop: '1rem' }}>Retour</button>
+              <div className="filter-bar" style={{ margin: '1.5rem 0' }}><button className={`filter-pill ${loginMode === 'code' ? 'active' : ''}`} onClick={() => setLoginMode('code')}>Code</button><button className={`filter-pill ${loginMode === 'email' ? 'active' : ''}`} onClick={() => setLoginMode('email')}>Email</button></div>
+              {loginMode === 'code' ? <input type="text" placeholder="XXXX - XXXX" className="input-styled" style={{ textAlign: 'center', fontSize: '1.5rem' }} value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value.toUpperCase())} maxLength={11} /> : <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}><input type="email" placeholder="Email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} /><input type="password" placeholder="Pass" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} /></div>}
+              <button className="btn-primary" onClick={handleLogin} disabled={loading} style={{ marginTop: '1.5rem' }}>Se connecter</button>
+              <button onClick={() => setView('splash')} className="btn-secondary" style={{ border: 'none', background: 'none' }}>Retour</button>
             </motion.div>
           )}
 
-          {/* 4. SUCCESS */}
           {view === 'success' && (
             <motion.div key="success" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card my-auto" style={{ padding: '2.5rem', textAlign: 'center' }}>
-              <div style={{ background: '#10b981', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><Check size={35} /></div><h2 className="title">Bienvenue !</h2><p className="subtitle">Voici ton code secret permanent :</p>
-              <div className="glass-card" style={{ background: 'rgba(255,255,255,0.5)', padding: '1.5rem', margin: '1.5rem 0', border: '2px dashed var(--primary)' }}><div style={{ fontSize: '1.8rem', fontWeight: 900, letterSpacing: '3px', color: 'var(--primary)' }}>{formatUID(uid)}</div></div>
-              <button onClick={() => setView('dashboard')} className="btn-primary">Découvrir mon dressing ✨</button>
+              <div style={{ background: '#10b981', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><Check size={35} /></div><h2 className="title">Bienvenue !</h2>
+              <div className="glass-card" style={{ padding: '1.5rem', margin: '1.5rem 0', border: '2px dashed var(--primary)' }}><div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary)' }}>{formatUID(uid)}</div></div>
+              <button onClick={() => setView('dashboard')} className="btn-primary">Mon dressing ✨</button>
             </motion.div>
           )}
 
-          {/* 5. DASHBOARD */}
+          {/* VUE DASHBOARD (PRINCIPALE) */}
           {view === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
               <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h1 className="title" style={{ fontSize: '2.4rem' }}>Dressflow</h1><div onClick={() => { setCityModalMode('home'); setShowCityModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', cursor: 'pointer', background: 'white', padding: '6px 12px', borderRadius: '12px' }}><MapPin size={14} /> {weather?.city || 'Localiser'}</div></header>
@@ -368,7 +416,51 @@ function App() {
             </motion.div>
           )}
 
-          {/* 6. STYLIST */}
+          {/* NOUVELLE VUE VOYAGE (STYLE AIRBNB) */}
+          {view === 'travel' && (
+            <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
+              <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.4rem' }}>Prêt à partir ? ✈️</h2></header>
+              
+              <div className="glass-card" style={{ padding: '1.5rem', borderRadius: '32px', boxShadow: '0 15px 40px rgba(0,0,0,0.08)', marginBottom: '2rem' }}>
+                <div onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.2rem', background: '#f8f9fa', borderRadius: '20px', marginBottom: '1rem', cursor: 'pointer', border: '1px solid rgba(0,0,0,0.05)' }}>
+                  <Search size={20} color="var(--primary)" />
+                  <div style={{ flex: 1 }}><div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>DESTINATION</div><div style={{ fontWeight: 800 }}>{travelData.destination || "Où pars-tu ?"}</div></div>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '0.8rem' }}>
+                  <div style={{ flex: 1, padding: '1rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>DÉPART</div>
+                    <input type="date" value={travelData.startDate} onChange={(e) => setTravelData({...travelData, startDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.9rem', outline: 'none' }} />
+                  </div>
+                  <div style={{ flex: 1, padding: '1rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>RETOUR</div>
+                    <input type="date" value={travelData.endDate} onChange={(e) => setTravelData({...travelData, endDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.9rem', outline: 'none' }} />
+                  </div>
+                </div>
+
+                <button className="btn-primary" onClick={handleGenerateSuitcase} disabled={suitcaseLoading} style={{ marginTop: '1.5rem', height: '60px', borderRadius: '20px' }}>
+                  {suitcaseLoading ? <Loader2 className="animate-spin" /> : <><Sparkles size={20} /> Générer ma valise ✨</>}
+                </button>
+              </div>
+
+              {suitcase.length > 0 && (
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}><Suitcase size={22} color="var(--primary)" /><h3 className="title" style={{ margin: 0, fontSize: '1.4rem' }}>Ma Valise Idéale</h3></div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
+                    {suitcase.map((pack, idx) => (
+                      <div key={idx} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem' }}>
+                        <div style={{ fontSize: '2rem' }}>{pack.icon}</div>
+                        <div style={{ flex: 1 }}><div style={{ fontSize: '0.7rem', fontWeight: 800, opacity: 0.5 }}>{pack.category.toUpperCase()}</div><div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{pack.type}</div></div>
+                        <div style={{ background: 'var(--primary)', color: 'white', padding: '6px 14px', borderRadius: '12px', fontWeight: 900 }}>x{pack.qty}</div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+
+          {/* AUTRES VUES (STYLISTE, SETTINGS, ETC.) */}
           {view === 'outfit-result' && (
             <motion.div key="outfit-result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Studio 🎨</h2><div className="filter-bar" style={{ marginTop: '1rem' }}><button className={`filter-pill ${stylistMode === 'ai' ? 'active' : ''}`} onClick={() => setStylistMode('ai')}><Sparkles size={14} /> IA ✨</button><button className={`filter-pill ${stylistMode === 'manual' ? 'active' : ''}`} onClick={() => setStylistMode('manual')}><Dices size={14} /> Mélangeur 🎮</button></div></header>
@@ -378,72 +470,11 @@ function App() {
                     <p className="subtitle" style={{ fontSize: '1rem', lineHeight: '1.4', marginBottom: '1.5rem' }}>{currentOutfit.explanation}</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>{[currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id).map(id => { const item = findItemById(id); return item ? (<div key={id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1rem' }}><div style={{ width: '60px', height: '60px', borderRadius: '12px', background: 'white', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '2rem', textAlign: 'center', lineHeight: '60px' }}>{item.icon}</div>}</div><div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: '1rem' }}>{item.type}</div><div className="subtitle" style={{ fontSize: '0.8rem' }}>{item.color}</div></div></div>) : null })}</div>
                     <button className="btn-primary" onClick={handleValidateOutfit} disabled={loading}><Check size={20} /> Je porte cette tenue !</button>
-                    <button className="btn-secondary" onClick={handleGenerateOutfitRequest} style={{ marginTop: '1rem' }}><RefreshCw size={20} /> Autre proposition IA</button>
                   </motion.div>
                 ) : (<div style={{ textAlign: 'center', padding: '4rem' }}><button className="btn-primary" onClick={handleGenerateOutfitRequest}>Générer une tenue IA ✨</button></div>)}</div>
               ) : (
-                <div style={{ marginTop: '1rem', paddingBottom: '4rem' }}><CategorySlider title="Tête" items={manualItems.head} selectedId={manualOutfit.head} onSelect={(id) => setManualOutfit({...manualOutfit, head: id})} /><CategorySlider title="Haut" items={manualItems.top} selectedId={manualOutfit.top} onSelect={(id) => setManualOutfit({...manualOutfit, top: id})} /><CategorySlider title="Couche" items={manualItems.layer} selectedId={manualOutfit.layer} onSelect={(id) => setManualOutfit({...manualOutfit, layer: id})} /><CategorySlider title="Bas" items={manualItems.bottom} selectedId={manualOutfit.bottom} onSelect={(id) => setManualOutfit({...manualOutfit, bottom: id})} /><CategorySlider title="Pieds" items={manualItems.feet} selectedId={manualOutfit.feet} onSelect={(id) => setManualOutfit({...manualOutfit, feet: id})} /><CategorySlider title="Sac" items={manualItems.bag} selectedId={manualOutfit.bag} onSelect={(id) => setManualOutfit({...manualOutfit, bag: id})} /><div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 100 }}><button className="btn-primary" onClick={handleValidateOutfit} disabled={loading} style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>{loading ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Valider ce look ! ✨</>}</button></div></div>
+                <div style={{ marginTop: '1rem', paddingBottom: '4rem' }}><CategorySlider title="Tête" items={manualItems.head} selectedId={manualOutfit.head} onSelect={(id) => setManualOutfit({...manualOutfit, head: id})} /><CategorySlider title="Haut" items={manualItems.top} selectedId={manualOutfit.top} onSelect={(id) => setManualOutfit({...manualOutfit, top: id})} /><CategorySlider title="Couche" items={manualItems.layer} selectedId={manualOutfit.layer} onSelect={(id) => setManualOutfit({...manualOutfit, layer: id})} /><CategorySlider title="Bas" items={manualItems.bottom} selectedId={manualOutfit.bottom} onSelect={(id) => setManualOutfit({...manualOutfit, bottom: id})} /><CategorySlider title="Pieds" items={manualItems.feet} selectedId={manualOutfit.feet} onSelect={(id) => setManualOutfit({...manualOutfit, feet: id})} /><CategorySlider title="Sac" items={manualItems.bag} selectedId={manualOutfit.bag} onSelect={(id) => setManualOutfit({...manualOutfit, bag: id})} /><div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 100 }}><button className="btn-primary" onClick={handleValidateOutfit} disabled={loading}><Check size={20} /> Valider ce look ! ✨</button></div></div>
               )}
-            </motion.div>
-          )}
-
-          {/* 7. TRAVEL */}
-          {view === 'travel' && (
-            <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
-              <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
-              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}><div onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} className="input-styled" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}><Search size={18} /> {travelData.destination || "Où pars-tu ?"}</div><button className="btn-primary" style={{ marginTop: '1rem' }}>Générer ma valise ✨</button></div>
-            </motion.div>
-          )}
-
-          {/* 8. SETTINGS */}
-          {view === 'settings' && (
-            <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
-              <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
-              <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}><div style={{ position: 'relative', width: '90px', height: '90px', margin: '0 auto 1.5rem' }}><div className="profile-avatar" style={{ overflow: 'hidden' }}>{avatarUrl ? <img src={avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (gender === 'female' ? '👩' : '👨')}</div>{isEmailConfirmed && <div style={{ position: 'absolute', bottom: 0, right: 0, background: '#10b981', color: 'white', borderRadius: '50%', padding: '4px' }}><ShieldCheck size={16} /></div>}</div><h3 className="title" style={{ fontSize: '1.6rem' }}>{name || 'Utilisateur'}</h3>{!isEmailConfirmed && <button className="btn-primary" onClick={() => setView('complete-profile')} style={{ marginBottom: '1.5rem' }}>Sécuriser mon compte 🛡️</button>}<button className="btn-secondary" onClick={handleLogout} style={{ color: '#f43f5e', width: '100%' }}>Déconnexion</button></div>
-            </motion.div>
-          )}
-
-          {/* 9. COMPLETE PROFILE */}
-          {view === 'complete-profile' && (
-            <motion.div key="complete-profile" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="dashboard-container">
-              <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2rem' }}>Finaliser mon profil</h2></header>
-              <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div style={{ textAlign: 'center' }}><div onClick={() => avatarInputRef.current.click()} style={{ width: '100px', height: '100px', borderRadius: '50%', background: 'white', margin: '0 auto 1rem', position: 'relative', overflow: 'hidden', cursor: 'pointer', border: '3px solid var(--primary)' }}>{avatarPreview || avatarUrl ? <img src={avatarPreview || avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Camera size={30} color="var(--primary)" />}</div><input type="file" ref={avatarInputRef} hidden onChange={handleAvatarChange} accept="image/*" /></div>
-                <input type="email" placeholder="Email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} /><input type="password" placeholder="Mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} /><input type="password" placeholder="Confirmer" className="input-styled" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                <button className="btn-primary" onClick={handleCompleteProfile} disabled={loading}>Sauvegarder ✨</button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* 10. ADD CHOICE */}
-          {view === 'add-choice' && (
-            <motion.div key="add-choice" initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="dashboard-container my-auto">
-              <div className="glass-card" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
-                <h2 className="title" style={{ fontSize: '1.8rem', marginBottom: '2rem' }}>Ajouter un vêtement</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  <button onClick={() => fileInputRef.current.click()} className="btn-primary" style={{ height: '70px' }}><Camera size={24} /> Prendre une photo</button>
-                  <button onClick={() => fileInputRef.current.click()} className="btn-secondary" style={{ height: '70px' }}><ImageIcon size={24} /> Choisir dans la galerie</button>
-                  <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept="image/*" />
-                </div>
-                <button onClick={() => setView('dashboard')} style={{ marginTop: '2rem', background: 'none', border: 'none', fontWeight: 800, opacity: 0.5 }}>Annuler</button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* 11. ADD DETAIL */}
-          {view === 'add-detail' && (
-            <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
-              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>{selectedImage && <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: '20px', maxHeight: '180px', objectFit: 'contain' }} />}</div>
-              <div className="glass-card" style={{ gap: '1.2rem', display: 'flex', flexDirection: 'column' }}><h2 className="title" style={{ fontSize: '1.4rem' }}>Détails détectés</h2><div style={{ display: 'flex', gap: '1rem' }}><select className="input-styled" style={{ flex: 2 }} value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value, icon: getIconForType(e.target.value)})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select><select className="input-styled" style={{ flex: 1 }} value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select></div><button onClick={handleAddItem} className="btn-primary" disabled={loading}>Ajouter ✨</button></div>
-            </motion.div>
-          )}
-
-          {/* 12. LOADING AI */}
-          {view === 'loading-ai' && (
-            <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container my-auto" style={{ textAlign: 'center' }}>
-              <Loader2 size={50} className="animate-spin" color="var(--primary)" style={{ margin: '0 auto 2rem' }} />
-              <h2 className="title">Analyse en cours...</h2>
-              <p className="subtitle">L'IA identifie ton vêtement ✨</p>
             </motion.div>
           )}
 
@@ -451,7 +482,7 @@ function App() {
 
         {isMainView && <BottomNav />}
 
-        {/* DRAWER DÉTAIL VÊTEMENT (TOUJOURS PRÉSENT) */}
+        {/* MODALES & DRAWERS (DÉJÀ CODÉES) */}
         <AnimatePresence>
           {selectedItem && (
             <div className="modal-overlay" style={{ alignItems: 'flex-end' }} onClick={() => { if (!isEditing) setSelectedItem(null); }}>
