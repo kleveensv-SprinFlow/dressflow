@@ -3,30 +3,50 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Shirt, Copy, ChevronLeft, Check, LogIn, Share2, 
   Plus, Camera, Image as ImageIcon, Sparkles, 
-  Tag, Palette, Sun, Briefcase, X, ArrowRight, Loader2
+  Tag, Palette, Sun, Briefcase, X, ArrowRight, Loader2,
+  Settings, Mail, ShieldCheck, LogOut
 } from 'lucide-react'
 
 // Styles & DB
 import './styles/index.css'
 import { supabase } from './lib/supabase'
+import { removeBackground } from './services/ai'
 
-// Components
-import ClothesCarousel from './components/ClothesCarousel'
+// Assets
+import logoImg from './assets/logo.png'
 
 function App() {
   const [view, setView] = useState('splash') 
   const [gender, setGender] = useState('female')
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [uid, setUid] = useState('')
   const [inputCode, setInputCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  
+  // Current Item state (for add flow)
+  const [newItem, setNewItem] = useState({
+    type: 'Robe',
+    color: 'Rose',
+    season: 'Été',
+    activity: 'Quotidien',
+    icon: '👗'
+  })
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', gender)
   }, [gender])
+
+  // Handle auto-transition from loading-ai to add-detail
+  useEffect(() => {
+    if (view === 'loading-ai') {
+      const timer = setTimeout(() => setView('add-detail'), 2500)
+      return () => clearTimeout(timer)
+    }
+  }, [view])
 
   // --- DATABASE LOGIC ---
 
@@ -50,19 +70,15 @@ function App() {
   const handleRegister = async () => {
     setLoading(true)
     setError(null)
-    
     const newUid = generateRandomUID()
-    
     const { error: regError } = await supabase
       .from('profiles')
       .insert([{ id: newUid, name, gender }])
-
     if (regError) {
       setError("Erreur lors de la création du profil.")
       setLoading(false)
       return
     }
-
     setUid(newUid)
     setView('success')
     setLoading(false)
@@ -72,50 +88,60 @@ function App() {
     setLoading(true)
     setError(null)
     const cleanCode = inputCode.replace(/[^A-Z0-9]/g, '')
-    
     const { data: profile, error: profError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', cleanCode)
       .single()
-
     if (profError || !profile) {
       setError("Code d'accès invalide.")
       setLoading(false)
       return
     }
-
     setUid(profile.id)
     setName(profile.name)
     setGender(profile.gender)
+    setEmail(profile.email || '')
     await fetchItems(profile.id)
     setView('dashboard')
     setLoading(false)
   }
 
-  const generateRandomUID = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-    let result = ''
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
+  const handleAddItem = async () => {
+    setLoading(true)
+    const { error: addError } = await supabase
+      .from('clothes')
+      .insert([{
+        profile_id: uid,
+        type: newItem.type,
+        color: newItem.color,
+        season: newItem.season,
+        activity: newItem.activity,
+        icon: newItem.icon
+      }])
+    
+    if (addError) {
+      alert("Erreur lors de l'ajout du vêtement.")
+    } else {
+      await fetchItems(uid)
+      setView('dashboard')
     }
-    return result
+    setLoading(false)
   }
 
-  // --- UTILS ---
-
-  const formatUID = (val) => {
-    const cleaned = val.replace(/[^A-Z0-9]/g, '').slice(0, 8)
-    if (cleaned.length > 4) {
-      return `${cleaned.slice(0, 4)} - ${cleaned.slice(4)}`
+  const handleLinkEmail = async () => {
+    setLoading(true)
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ email })
+      .eq('id', uid)
+    
+    if (updateError) {
+      alert("Erreur lors de l'enregistrement de l'email.")
+    } else {
+      alert("Email enregistré ! Un mail de confirmation va vous être envoyé.")
     }
-    return cleaned
-  }
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(uid)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setLoading(false)
   }
 
   const handleShare = async () => {
@@ -127,8 +153,26 @@ function App() {
         })
       } catch (err) { console.log(err) }
     } else {
-      handleCopy()
+      navigator.clipboard.writeText(uid)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     }
+  }
+
+  const generateRandomUID = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let result = ''
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return result
+  }
+
+  // --- UI UTILS ---
+  const formatUID = (val) => {
+    const cleaned = val.replace(/[^A-Z0-9]/g, '').slice(0, 8)
+    if (cleaned.length > 4) return `${cleaned.slice(0, 4)} - ${cleaned.slice(4)}`
+    return cleaned
   }
 
   return (
@@ -143,134 +187,53 @@ function App() {
           
           {/* SPLASH VIEW */}
           {view === 'splash' && (
-            <motion.div 
-              key="splash" 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.8, ease: "circOut" }}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
-            >
+            <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="logo-container">
-                <ClothesCarousel />
+                <motion.img 
+                  src={logoImg} 
+                  alt="Dressflow Logo" 
+                  style={{ width: '180px', height: 'auto', marginBottom: '1rem' }}
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', damping: 10 }}
+                />
                 <h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1>
-                <p className="subtitle">L'intelligence artificielle au service de votre style.</p>
+                <p className="subtitle">L'IA au service de votre style.</p>
               </div>
-              
               <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
-                <button onClick={() => setView('register')} className="btn-primary">
-                  Créer mon dressing ✨
-                </button>
-                <button onClick={() => setView('login')} className="btn-secondary">
-                  J'ai déjà un code d'accès
-                </button>
+                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
+                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un code d'accès</button>
               </div>
             </motion.div>
           )}
 
           {/* REGISTER VIEW */}
           {view === 'register' && (
-            <motion.div 
-              key="register" 
-              initial={{ opacity: 0, x: 100 }} 
-              animate={{ opacity: 1, x: 0 }} 
-              exit={{ opacity: 0, x: -100 }}
-              className="glass-card my-auto"
-            >
-              <button onClick={() => setView('splash')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, cursor: 'pointer', marginBottom: '1.5rem' }}>
-                <ChevronLeft size={20} /> Retour
-              </button>
-              
+            <motion.div key="register" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
+              <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none' }}><ChevronLeft size={20} /> Retour</button>
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Nouveau Dressing</h2>
-              
-              <div style={{ marginBottom: '2rem' }}>
-                <label className="subtitle" style={{ display: 'block', marginBottom: '0.8rem', fontSize: '1rem' }}>Quel est ton prénom ?</label>
-                <input type="text" placeholder="Ex: Julie" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} />
+              <input type="text" placeholder="Ton prénom" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} />
+              <div className="gender-toggle">
+                <button className={`gender-btn ${gender === 'female' ? 'active' : ''}`} onClick={() => setGender('female')}>Femme</button>
+                <button className={`gender-btn ${gender === 'male' ? 'active' : ''}`} onClick={() => setGender('male')}>Homme</button>
+                <button className={`gender-btn ${gender === 'neutral' ? 'active' : ''}`} onClick={() => setGender('neutral')}>Neutre</button>
               </div>
-
-              <div>
-                <label className="subtitle" style={{ display: 'block', marginBottom: '0.8rem', fontSize: '1rem' }}>Ton univers style</label>
-                <div className="gender-toggle">
-                  <button className={`gender-btn ${gender === 'female' ? 'active' : ''}`} onClick={() => setGender('female')}>Femme</button>
-                  <button className={`gender-btn ${gender === 'male' ? 'active' : ''}`} onClick={() => setGender('male')}>Homme</button>
-                  <button className={`gender-btn ${gender === 'neutral' ? 'active' : ''}`} onClick={() => setGender('neutral')}>Neutre</button>
-                </div>
-              </div>
-              
-              {error && <p style={{ color: '#f43f5e', fontSize: '0.9rem', marginBottom: '1rem' }}>{error}</p>}
-
-              <div style={{ marginTop: '2rem' }}>
-                <button className="btn-primary" onClick={handleRegister} disabled={!name || loading}>
-                  {loading ? <Loader2 className="animate-spin" /> : <>Continuer <ArrowRight size={20} /></>}
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* LOGIN VIEW */}
-          {view === 'login' && (
-            <motion.div 
-              key="login" 
-              initial={{ opacity: 0, x: -100 }} 
-              animate={{ opacity: 1, x: 0 }} 
-              exit={{ opacity: 0, x: 100 }}
-              className="glass-card my-auto"
-            >
-              <button onClick={() => setView('splash')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, cursor: 'pointer', marginBottom: '1.5rem' }}>
-                <ChevronLeft size={20} /> Retour
-              </button>
-              
-              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Connexion</h2>
-              
-              <div style={{ marginBottom: '2.5rem' }}>
-                <label className="subtitle" style={{ display: 'block', marginBottom: '1rem', fontSize: '1rem' }}>Ton code secret</label>
-                <input 
-                  type="text" 
-                  placeholder="XXXX - XXXX" 
-                  className="input-styled" 
-                  style={{ textTransform: 'uppercase', letterSpacing: '4px', textAlign: 'center', fontWeight: 800 }} 
-                  value={inputCode} 
-                  onChange={(e) => setInputCode(formatUID(e.target.value.toUpperCase()))} 
-                />
-              </div>
-
-              {error && <p style={{ color: '#f43f5e', fontSize: '0.9rem', marginBottom: '1rem' }}>{error}</p>}
-
-              <button className="btn-primary" onClick={handleLogin} disabled={inputCode.length < 11 || loading}>
-                {loading ? <Loader2 className="animate-spin" /> : <>Entrer <LogIn size={20} /></>}
-              </button>
+              <button className="btn-primary" onClick={handleRegister} disabled={!name || loading}>{loading ? <Loader2 className="animate-spin" /> : <>C'est parti <ArrowRight size={20} /></>}</button>
             </motion.div>
           )}
 
           {/* SUCCESS VIEW */}
           {view === 'success' && (
-            <motion.div 
-              key="success" 
-              initial={{ opacity: 0, scale: 0.9 }} 
-              animate={{ opacity: 1, scale: 1 }} 
-              className="glass-card my-auto" 
-              style={{ textAlign: 'center' }}
-            >
+            <motion.div key="success" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card my-auto" style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '5rem', marginBottom: '1.5rem' }}>✨</div>
-              <h2 className="title" style={{ fontSize: '2.2rem', marginBottom: '1rem' }}>Bravo {name} !</h2>
-              <p className="subtitle" style={{ margin: '0 auto 2rem auto' }}>Voici ton code unique pour accéder à ton dressing.</p>
-              
-              <div className="uid-box">
-                <div className="uid-text">{uid}</div>
+              <h2 className="title" style={{ fontSize: '2.2rem' }}>Bravo {name} !</h2>
+              <p className="subtitle" style={{ margin: '0 auto 2rem auto' }}>Note bien ce code unique pour ton dressing.</p>
+              <div className="uid-box"><div className="uid-text">{uid}</div></div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button className="btn-primary" onClick={() => { navigator.clipboard.writeText(uid); setCopied(true); setTimeout(() => setCopied(false), 2000); }} style={{ flex: 1 }}>{copied ? 'Copié !' : 'Copier'}</button>
+                <button className="btn-primary" onClick={handleShare} style={{ background: 'rgba(255,255,255,0.8)', color: '#000', width: '80px', boxShadow: 'none' }}><Share2 size={24} /></button>
               </div>
-
-              <div style={{ display: 'flex', gap: '1rem', width: '100%', marginTop: '1rem' }}>
-                <button className="btn-primary" onClick={handleCopy} style={{ flex: 1 }}>
-                  {copied ? <Check size={20} /> : <><Copy size={20} /> Copier</>}
-                </button>
-                <button className="btn-primary" onClick={handleShare} style={{ background: 'rgba(255,255,255,0.8)', color: '#000', width: '80px', boxShadow: 'none' }}>
-                  <Share2 size={24} />
-                </button>
-              </div>
-              
-              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ marginTop: '2.5rem' }}>
-                Accéder à mon dressing
-              </button>
+              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ marginTop: '2.5rem' }}>Accéder à mon dressing</button>
             </motion.div>
           )}
 
@@ -279,20 +242,15 @@ function App() {
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h1 className="title" style={{ fontSize: '2.4rem' }}>Dressflow</h1>
-                <div className="gender-btn" style={{ width: '50px', height: '50px', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 0 }}>
-                  <Sparkles size={24} />
+                <div onClick={() => setView('settings')} style={{ cursor: 'pointer', padding: '10px' }}>
+                  <Settings size={28} color="var(--text-main)" />
                 </div>
               </header>
-              
-              {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
-                  <Loader2 className="animate-spin" size={40} color="var(--primary)" />
-                </div>
-              ) : items.length === 0 ? (
+              {loading ? <div style={{ textAlign: 'center', padding: '4rem' }}><Loader2 className="animate-spin" size={40} /></div> : items.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-                  <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>🧥</div>
+                  <div style={{ fontSize: '4rem' }}>🧥</div>
                   <h3 className="title" style={{ fontSize: '1.4rem' }}>Dressing vide</h3>
-                  <p className="subtitle">Ajoute ton premier vêtement pour commencer.</p>
+                  <button onClick={() => setView('add-choice')} className="btn-primary" style={{ marginTop: '2rem' }}>Ajouter un habit</button>
                 </div>
               ) : (
                 <div className="item-grid">
@@ -301,16 +259,94 @@ function App() {
                       <div className="item-image">{item.icon || '👕'}</div>
                       <div className="item-info">
                         <div className="item-type">{item.type}</div>
-                        <div className="item-meta">{item.brand} • {item.season}</div>
+                        <div className="item-meta">{item.activity} • {item.season}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
+              <button className="fab" onClick={() => setView('add-choice')}><Plus size={35} /></button>
+            </motion.div>
+          )}
 
-              <button className="fab" onClick={() => alert('Mode Caméra bientôt disponible !')}>
-                <Plus size={35} />
-              </button>
+          {/* SETTINGS VIEW */}
+          {view === 'settings' && (
+            <motion.div key="settings" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="glass-card my-auto">
+              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none' }}><ChevronLeft size={20} /> Retour</button>
+              <h2 className="title" style={{ fontSize: '2rem', marginBottom: '2rem' }}>Paramètres</h2>
+              
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.4)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                  <Mail size={24} color="var(--primary)" />
+                  <h3 style={{ fontSize: '1.1rem' }}>Sécuriser mon compte</h3>
+                </div>
+                <p className="subtitle" style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>Liez votre email pour ne jamais perdre vos données.</p>
+                <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.5rem' }}>Lier mon email</button>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1.5rem', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
+                <button onClick={() => setView('splash')} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '1rem', width: '100%' }}>
+                  <LogOut size={24} /> Déconnexion
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ADD CHOICE & FLOW */}
+          {view === 'add-choice' && (
+            <motion.div key="add-choice" initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderRadius: '40px 40px 0 0', padding: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <h2 className="title" style={{ fontSize: '1.6rem' }}>Ajouter un habit</h2>
+                <button onClick={() => setView('dashboard')} style={{ background: 'none', border: 'none' }}><X size={28} /></button>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button onClick={() => { setView('loading-ai') }} className="btn-primary" style={{ flex: 1, height: '140px', flexDirection: 'column', background: 'white', color: 'var(--text-main)', border: '1px solid var(--border)' }}><Camera size={32} /> Photo</button>
+                <button onClick={() => { setView('loading-ai') }} className="btn-primary" style={{ flex: 1, height: '140px', flexDirection: 'column', background: 'white', color: 'var(--text-main)', border: '1px solid var(--border)' }}><ImageIcon size={32} /> Galerie</button>
+              </div>
+            </motion.div>
+          )}
+
+          {view === 'loading-ai' && (
+            <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center' }}>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>✨</motion.div>
+              <h2 className="title" style={{ fontSize: '1.8rem' }}>Analyse par l'IA...</h2>
+              <p className="subtitle" style={{ margin: 'auto' }}>Détourage et détection automatique des caractéristiques.</p>
+            </motion.div>
+          )}
+
+          {view === 'add-detail' && (
+            <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container" style={{ width: '100%' }}>
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '6rem' }}>👗</div>
+                <p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Fond supprimé ✨</p>
+              </div>
+              
+              <div className="glass-card" style={{ gap: '1.5rem' }}>
+                <h2 className="title" style={{ fontSize: '1.6rem' }}>Vérification</h2>
+                
+                <div>
+                  <label className="subtitle" style={{ fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block' }}>Type</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {['Robe', 'Haut', 'Bas', 'Veste'].map(t => (
+                      <span key={t} className={`tag-pill ${newItem.type === t ? 'active' : ''}`} onClick={() => setNewItem({...newItem, type: t})}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="subtitle" style={{ fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block' }}>Activité</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {['Quotidien', 'Travail', 'Sport', 'Soirée'].map(a => (
+                      <span key={a} className={`tag-pill ${newItem.activity === a ? 'active' : ''}`} onClick={() => setNewItem({...newItem, activity: a})}>{a}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <button onClick={handleAddItem} className="btn-primary" disabled={loading}>
+                  {loading ? <Loader2 className="animate-spin" /> : <>Valider et ajouter</>}
+                </button>
+              </div>
             </motion.div>
           )}
 
