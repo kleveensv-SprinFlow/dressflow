@@ -7,7 +7,7 @@ import {
   Settings, Mail, ShieldCheck, LogOut, AlertCircle,
   Thermometer, CloudRain, Wind, Wand2, RefreshCw,
   Calendar, Trash2, Heart, ShoppingBag, Home, User,
-  LifeBuoy, FileText, ShieldAlert
+  LifeBuoy, FileText, ShieldAlert, Key
 } from 'lucide-react'
 
 // Styles & DB & Services
@@ -97,6 +97,11 @@ function App() {
   }, [gender])
 
   useEffect(() => {
+    // Check if user is already logged in via Supabase Auth
+    checkUserSession()
+  }, [])
+
+  useEffect(() => {
     if (view === 'dashboard' || view === 'outfit-result' || view === 'settings') {
       if (!weather) initWeather()
       checkForForgottenItems()
@@ -114,6 +119,27 @@ function App() {
     }
     return () => clearInterval(interval);
   }, [view])
+
+  const checkUserSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.email) {
+      // Find profile by email
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', session.user.email)
+        .single()
+      
+      if (profile) {
+        setUid(profile.id)
+        setName(profile.name)
+        setGender(profile.gender)
+        setEmail(profile.email)
+        await fetchItems(profile.id)
+        setView('dashboard')
+      }
+    }
+  }
 
   const initWeather = async () => {
     const data = await getLocalWeather()
@@ -145,7 +171,7 @@ function App() {
     setForgottenItems(forgotten)
   }
 
-  // --- DATABASE LOGIC ---
+  // --- DATABASE & AUTH LOGIC ---
 
   const fetchItems = async (profileId) => {
     setLoading(true)
@@ -187,17 +213,27 @@ function App() {
   const handleLinkEmail = async () => {
     if (!email) return;
     setLoading(true)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ email })
-      .eq('id', uid)
-    
-    if (error) {
-      alert("Erreur lors de la sauvegarde.")
-    } else {
-      alert("Compte sécurisé ! ✨")
+    try {
+      // 1. Envoyer Magic Link pour authentifier l'email
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin }
+      })
+      if (authError) throw authError
+
+      // 2. Mettre à jour le profil avec l'email (pour liaison future)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ email })
+        .eq('id', uid)
+      if (profileError) throw profileError
+
+      alert("Vérifie tes emails ! Clique sur le lien pour sécuriser ton compte. ✨")
+    } catch (err) {
+      alert("Erreur : " + err.message)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const handleDeleteAccount = async () => {
@@ -205,12 +241,11 @@ function App() {
 
     setLoading(true)
     try {
-      // 1. Supprimer les vêtements
       await supabase.from('clothes').delete().eq('profile_id', uid)
-      // 2. Supprimer le profil
       await supabase.from('profiles').delete().eq('id', uid)
+      await supabase.auth.signOut()
       
-      alert("Ton compte a été supprimé. On espère te revoir bientôt ! 👋")
+      alert("Ton compte a été supprimé. 👋")
       setView('splash')
       setUid('')
       setName('')
@@ -243,22 +278,47 @@ function App() {
     setLoading(true)
     setError(null)
     const cleanCode = inputCode.replace(/[^A-Z0-9]/g, '')
+    
+    // Check if this code is already secured by email
     const { data: profile, error: profError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', cleanCode)
       .single()
+
     if (profError || !profile) {
       setError("Code d'accès invalide.")
       setLoading(false)
       return
     }
+
+    if (profile.email) {
+      setError("Ce compte est sécurisé par email. Connecte-toi via ton adresse email.")
+      setLoading(false)
+      return
+    }
+
     setUid(profile.id)
     setName(profile.name)
     setGender(profile.gender)
     setEmail(profile.email || '')
     await fetchItems(profile.id)
     setView('dashboard')
+    setLoading(false)
+  }
+
+  const handleLoginEmail = async () => {
+    if (!email) return;
+    setLoading(true)
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin }
+    })
+    if (error) {
+      alert("Erreur : " + error.message)
+    } else {
+      alert("Un lien de connexion a été envoyé par email ! ✨")
+    }
     setLoading(false)
   }
 
@@ -514,11 +574,21 @@ function App() {
               
               <div className="glass-card" style={{ padding: '1.2rem', background: 'rgba(255,255,255,0.4)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
-                  <Mail size={20} color="var(--primary)" />
-                  <h3 style={{ fontSize: '1rem' }}>Sécuriser mon compte</h3>
+                  <ShieldCheck size={20} color="var(--primary)" />
+                  <h3 style={{ fontSize: '1rem' }}>Sécurité du compte</h3>
                 </div>
-                <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '0.8rem' }} />
-                <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.8rem', padding: '0.8rem', fontSize: '0.9rem' }}>Sauvegarder l'email</button>
+                {email ? (
+                  <div style={{ background: 'white', padding: '0.8rem', borderRadius: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Check size={18} color="#10b981" />
+                    <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{email}</span>
+                  </div>
+                ) : (
+                  <>
+                    <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '0.8rem' }} />
+                    <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.8rem', padding: '0.8rem', fontSize: '0.9rem' }}>Sécuriser via Email</button>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>Indispensable pour ne jamais perdre ton dressing !</p>
+                  </>
+                )}
               </div>
 
               <div className="glass-card" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
@@ -530,14 +600,10 @@ function App() {
                   <FileText size={20} color="var(--primary)" />
                   <span style={{ fontWeight: 600 }}>Mentions Légales</span>
                 </button>
-                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}>
-                  <ShieldAlert size={20} color="var(--primary)" />
-                  <span style={{ fontWeight: 600 }}>Confidentialité</span>
-                </button>
               </div>
 
               <div className="glass-card" style={{ padding: '1.2rem', background: 'rgba(244, 63, 94, 0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <button onClick={() => setView('splash')} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
+                <button onClick={async () => { await supabase.auth.signOut(); setView('splash'); setUid(''); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
                   <LogOut size={20} /> Déconnexion
                 </button>
                 <button onClick={handleDeleteAccount} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
@@ -547,17 +613,7 @@ function App() {
             </motion.div>
           )}
 
-          {/* LOADING VIEWS */}
-          {(view === 'loading-ai' || view === 'loading-outfit') && (
-            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
-              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>
-                {view === 'loading-ai' ? '🧠' : '🪄'}
-              </motion.div>
-              <h2 className="title" style={{ fontSize: '1.8rem' }}>{loadingPhrase}</h2>
-            </motion.div>
-          )}
-
-          {/* SPLASH, LOGIN, REGISTER, SUCCESS */}
+          {/* SPLASH VIEW */}
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="logo-container">
@@ -567,26 +623,48 @@ function App() {
               </div>
               <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
                 <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
-                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un code d'accès</button>
+                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
               </div>
             </motion.div>
           )}
+
+          {/* LOGIN CHOICES */}
           {view === 'login' && (
             <motion.div key="login" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
               <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Connexion</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <button onClick={() => setView('login-code')} className="btn-primary" style={{ background: 'white', color: 'black' }}><Key size={20} /> Via Code d'accès</button>
+                <button onClick={() => setView('login-email')} className="btn-primary"><Mail size={20} /> Via Email</button>
+              </div>
+            </motion.div>
+          )}
+
+          {view === 'login-code' && (
+            <motion.div key="login-code" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} className="glass-card my-auto">
+              <button onClick={() => setView('login')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
+              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Code d'accès</h2>
+              {error && <div style={{ color: '#f43f5e', fontSize: '0.8rem', marginBottom: '1rem', fontWeight: 700 }}>{error}</div>}
               <input type="text" placeholder="Ex: AB12 - CD34" className="input-styled" value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value)} maxLength={11} />
               <button className="btn-primary" onClick={handleLogin} disabled={inputCode.length < 8 || loading} style={{ marginTop: '2rem' }}>{loading ? <Loader2 className="animate-spin" /> : <>Se connecter <ArrowRight size={20} /></>}</button>
             </motion.div>
           )}
+
+          {view === 'login-email' && (
+            <motion.div key="login-email" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} className="glass-card my-auto">
+              <button onClick={() => setView('login')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
+              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Email Login</h2>
+              <p className="subtitle" style={{ marginBottom: '1.5rem' }}>Nous t'enverrons un lien magique pour te connecter.</p>
+              <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <button className="btn-primary" onClick={handleLoginEmail} disabled={!email || loading} style={{ marginTop: '2rem' }}>{loading ? <Loader2 className="animate-spin" /> : <>Envoyer le lien <Mail size={20} /></>}</button>
+            </motion.div>
+          )}
+
+          {/* REGISTER & SUCCESS */}
           {view === 'register' && (
             <motion.div key="register" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
               <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
-              
-              <div style={{ marginBottom: '1.5rem' }}>
-                <RotatingClothes />
-              </div>
-
+              <div style={{ marginBottom: '1.5rem' }}><RotatingClothes /></div>
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2.5rem', textAlign: 'center' }}>Nouveau Dressing</h2>
               <input type="text" placeholder="Ton prénom" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} />
               <div className="gender-toggle">
@@ -611,7 +689,7 @@ function App() {
             </motion.div>
           )}
 
-          {/* ADD FLOW VIEWS */}
+          {/* ADD FLOW VIEWS (UNCHANGED) */}
           {view === 'add-choice' && (
             <motion.div key="add-choice" initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderRadius: '40px 40px 0 0', padding: '2rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -656,9 +734,18 @@ function App() {
             </motion.div>
           )}
 
+          {(view === 'loading-ai' || view === 'loading-outfit') && (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>
+                {view === 'loading-ai' ? '🧠' : '🪄'}
+              </motion.div>
+              <h2 className="title" style={{ fontSize: '1.8rem' }}>{loadingPhrase}</h2>
+            </motion.div>
+          )}
+
         </AnimatePresence>
 
-        {/* ALERTS MODAL */}
+        {/* ALERTS MODAL (UNCHANGED) */}
         <AnimatePresence>
           {showAlertModal && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setShowAlertModal(false)}>
