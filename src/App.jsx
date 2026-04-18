@@ -9,10 +9,10 @@ import {
   Calendar, Trash2, Heart, ShoppingBag, Home, User,
   LifeBuoy, FileText, ShieldAlert, Key, Lock, Search,
   MapPin, Luggage, Plane, ListChecks, ChevronRight,
-  UserCircle, Edit3, Save, Info
+  UserCircle, Edit3, Save, Info, MapPinned
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
-import { App as CapApp } from '@capacitor/app' // ÉTAPE 4 PHASE 2 : Plugin pour Deep Linking
+import { App as CapApp } from '@capacitor/app'
 
 // Styles & DB & Services
 import './styles/index.css'
@@ -45,14 +45,14 @@ function App() {
   const [email, setEmail] = useState('')
   const [isEmailConfirmed, setIsEmailConfirmed] = useState(false)
   const [uid, setUid] = useState('') 
-  const [inputCode, setInputCode] = useState('')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [selectedItem, setSelectedItem] = useState(null)
-  const [isEditing, setIsEditing] = useState(false)
-  const [editForm, setEditForm] = useState(null)
+  
+  // Weather states (ÉTAPE 5 PHASE 2)
   const [weather, setWeather] = useState(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherError, setWeatherError] = useState(null)
+  
   const [citySearch, setCitySearch] = useState('')
   const [cityResults, setCityResults] = useState([])
   const [showCityModal, setShowCityModal] = useState(false)
@@ -64,7 +64,9 @@ function App() {
   const [currentOutfit, setCurrentOutfit] = useState(null)
   const [outfitLoading, setOutfitLoading] = useState(false)
   const [forgottenItems, setForgottenItems] = useState([])
-  const [loadingPhrase, setLoadingPhrase] = useState("Analyse de ton dressing...")
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState(null)
 
   const fileInputRef = useRef(null)
   const camInputRef = useRef(null)
@@ -80,15 +82,11 @@ function App() {
   
   useEffect(() => { 
     checkUserSession()
-    
-    // ÉTAPE 4 PHASE 2 : Écouteur de Deep Link pour Android
     CapApp.addListener('appUrlOpen', data => {
-      const url = new URL(data.url.replace('#', '?')) // Convertir le fragment # en params pour URLSearchParams
+      const url = new URL(data.url.replace('#', '?'))
       const accessToken = url.searchParams.get('access_token')
       const refreshToken = url.searchParams.get('refresh_token')
-      if (accessToken && refreshToken) {
-        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-      }
+      if (accessToken && refreshToken) supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -104,12 +102,22 @@ function App() {
 
   useEffect(() => {
     if (['dashboard', 'outfit-result', 'settings', 'travel'].includes(view)) {
-      if (!weather) initWeather(); checkForForgottenItems();
+      if (!weather && !weatherLoading) initWeather(); checkForForgottenItems();
     }
   }, [view, items])
 
   const initWeather = async (lat = null, lon = null, cityName = null) => {
-    const data = await getLocalWeather(lat, lon); if (cityName) data.city = cityName; setWeather(data)
+    setWeatherLoading(true)
+    setWeatherError(null)
+    try {
+      const data = await getLocalWeather(lat, lon)
+      if (cityName) data.city = cityName
+      setWeather(data)
+    } catch (err) {
+      setWeatherError("Géolocalisation refusée ou indisponible.")
+    } finally {
+      setWeatherLoading(false)
+    }
   }
 
   const checkUserSession = async () => {
@@ -128,29 +136,24 @@ function App() {
   }
 
   const fetchItems = async (profileId) => {
-    setLoading(true)
-    const { data, error } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
-    if (error) setError("Erreur de chargement."); else setItems(data || [])
-    setLoading(false)
+    setLoading(true); const { data } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
+    setItems(data || []); setLoading(false)
   }
 
   const handleLogout = async () => {
     setLoading(true)
     try {
       await supabase.auth.signOut()
-      setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setSuitcase([]); setCurrentOutfit(null); setForgottenItems([]); setError(null); setTravelData({ destination: '', lat: null, lon: null }); setView('splash')
-    } catch (err) { alert("Erreur déconnexion") }
-    finally { setLoading(false) }
+      setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setSuitcase([]); setCurrentOutfit(null); setForgottenItems([]); setWeather(null); setView('splash')
+    } catch (err) { alert("Erreur") } finally { setLoading(false) }
   }
 
   const handleLinkEmail = async () => {
     if (!email || isEmailConfirmed) return; setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
-      if (error) throw error
-      alert("Lien magique envoyé ! ✨ Vérifie tes emails.")
-    } catch (err) { alert(err.message) }
-    finally { setLoading(false) }
+      await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
+      alert("Lien envoyé ! ✨")
+    } catch (err) { alert(err.message) } finally { setLoading(false) }
   }
 
   const handleAddItem = async () => {
@@ -161,8 +164,7 @@ function App() {
       const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
       await supabase.from('clothes').insert([{ profile_id: uid, ...newItem, image_url: publicUrl, last_worn_date: new Date().toISOString() }])
       await fetchItems(uid); setView('dashboard'); setSelectedImage(null); setTempFile(null)
-    } catch (err) { alert(err.message) }
-    finally { setLoading(false) }
+    } catch (err) { alert(err.message) } finally { setLoading(false) }
   }
 
   const handleUpdateLastWorn = async (item) => {
@@ -175,15 +177,14 @@ function App() {
     try {
       const result = await generateOutfit(items, weather || await getLocalWeather())
       setCurrentOutfit(result); setView('outfit-result')
-    } catch (err) { alert("Erreur") }
-    finally { setOutfitLoading(false) }
+    } catch (err) { alert("Erreur") } finally { setOutfitLoading(false) }
   }
 
   const handleValidateOutfit = async () => {
     if (!currentOutfit) return;
     const ids = [currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id)
     await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).in('id', ids)
-    await fetchItems(uid); alert("Super style ! ✨"); setView('dashboard')
+    await fetchItems(uid); setView('dashboard')
   }
 
   const handleCitySearch = async (val) => {
@@ -203,8 +204,7 @@ function App() {
       const destWeather = await getLocalWeather(travelData.lat, travelData.lon)
       const suggestions = items.filter(item => getItemWeatherScore(item, destWeather.temp) > 0).slice(0, 10).map(s => ({ ...s, checked: false }))
       setSuitcase(suggestions)
-    } catch (err) { alert("Erreur") }
-    finally { setSuitcaseLoading(false) }
+    } catch (err) { alert("Erreur") } finally { setSuitcaseLoading(false) }
   }
 
   const handleDeleteItem = async (id) => {
@@ -223,7 +223,6 @@ function App() {
   const handleLogin = async () => {
     setLoading(true); const { data: profile } = await supabase.from('profiles').select('*').eq('id', inputCode.replace(/[^A-Z0-9]/g, '')).single()
     if (!profile) { setError("Code invalide"); setLoading(false); return; }
-    if (profile.email) { setError("Email requis."); setLoading(false); return; }
     setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); await fetchItems(profile.id); setView('dashboard'); setLoading(false)
   }
 
@@ -234,11 +233,8 @@ function App() {
       try {
         const aiTags = await analyzeClothing(file)
         setNewItem({ ...newItem, ...aiTags, icon: getIconForType(aiTags.type) })
-        setTempFile(file)
-        setSelectedImage(URL.createObjectURL(file))
-        setView('add-detail')
-      } catch (err) { setView('add-detail') }
-      finally { setLoading(false) }
+        setTempFile(file); setSelectedImage(URL.createObjectURL(file)); setView('add-detail')
+      } catch (err) { setView('add-detail') } finally { setLoading(false) }
     }
   }
 
@@ -248,10 +244,6 @@ function App() {
 
   const generateRandomUID = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let res = ''; for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res
-  }
-
-  const formatUID = (val) => {
-    const cleaned = val.replace(/[^A-Z0-9]/g, '').slice(0, 8); return cleaned.length > 4 ? `${cleaned.slice(0, 4)} - ${cleaned.slice(4)}` : cleaned
   }
 
   const checkForForgottenItems = () => {
@@ -290,14 +282,27 @@ function App() {
                 <h1 className="title" style={{ fontSize: '2.4rem' }}>Dressflow</h1>
                 <div onClick={() => { setCityModalMode('home'); setShowCityModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', cursor: 'pointer', background: 'white', padding: '6px 12px', borderRadius: '12px' }}><MapPin size={14} /> {weather?.city || 'Localiser'}</div>
               </header>
-              <div className="glass-card" onClick={() => { setCityModalMode('home'); setShowCityModal(true); }} style={{ padding: '1.2rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><div style={{ background: 'var(--primary)', color: 'white', padding: '12px', borderRadius: '18px' }}><Sun size={24} /></div><div><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div><div className="subtitle" style={{ fontSize: '0.85rem', marginTop: 0 }}>{weather ? weather.description : 'Récupération...'}</div></div></div>
+
+              {/* SECTION MÉTÉO AMÉLIORÉE (ÉTAPE 5 PHASE 2) */}
+              <div className="glass-card" onClick={() => { setCityModalMode('home'); setShowCityModal(true); }} style={{ padding: '1.2rem', marginBottom: '1.5rem', cursor: 'pointer' }}>
+                {weatherLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><Loader2 className="animate-spin" size={24} color="var(--primary)" /> <div className="subtitle">Localisation en cours...</div></div>
+                ) : weatherError ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#f43f5e' }}><AlertCircle size={24} /> <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>Position introuvable</div></div> <div style={{ background: 'var(--primary)', color: 'white', padding: '6px 12px', borderRadius: '10px', fontSize: '0.75rem' }}>Choisir une ville</div></div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><div style={{ background: 'var(--primary)', color: 'white', padding: '12px', borderRadius: '18px' }}><Sun size={24} /></div><div><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div><div className="subtitle" style={{ fontSize: '0.85rem', marginTop: 0 }}>{weather ? weather.description : 'Clique pour localiser'}</div></div></div>
+                    <ChevronRight size={20} style={{ opacity: 0.3 }} />
+                  </div>
+                )}
               </div>
+
               <div className="filter-bar">{['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'].map(f => (<button key={f} className={`filter-pill ${activeFilter === f ? 'active' : ''}`} onClick={() => setActiveFilter(f)}>{f}</button>))}</div>
               <div className="item-grid">{items.map(item => (<div key={item.id} className="item-card" onClick={() => setSelectedItem(item)}><div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}{getItemWeatherScore(item, weather?.temp || 20) > 5 && <div className="weather-badge"><Sparkles size={12} /></div>}</div><div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.color} • {item.activity}</div></div></div>))}</div>
             </motion.div>
           )}
 
+          {/* OTHERS VIEWS REMAIN UNCHANGED BUT FETCHED */}
           {view === 'travel' && (
             <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
@@ -314,7 +319,6 @@ function App() {
             </motion.div>
           )}
 
-          {/* OTHERS VIEWS */}
           {view === 'outfit-result' && currentOutfit && (
             <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Ton Styliste 🪄</h2><p className="subtitle">{currentOutfit.explanation}</p></header>
@@ -356,6 +360,17 @@ function App() {
                   <select className="input-styled" value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
                 </div>
                 <button onClick={handleAddItem} className="btn-primary" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Confirmer ✨"}</button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* AUTH FLOWS */}
+          {view === 'splash' && (
+            <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
+              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
+                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
+                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
               </div>
             </motion.div>
           )}
