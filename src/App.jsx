@@ -47,11 +47,12 @@ function App() {
   const [uid, setUid] = useState('') 
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-  const [inputCode, setInputCode] = useState('') // ÉTAPE 6 PHASE 3 : Saisie du code
+  const [inputCode, setInputCode] = useState('')
   
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
+  const [error, setError] = useState(null)
   
   const [citySearch, setCitySearch] = useState('')
   const [cityResults, setCityResults] = useState([])
@@ -59,7 +60,6 @@ function App() {
   const [cityModalMode, setCityModalMode] = useState('home')
   const [activeFilter, setActiveFilter] = useState('Tous')
   
-  // Persistence Voyage (ÉTAPE 5 PHASE 3)
   const [travelData, setTravelData] = useState({ destination: '', lat: null, lon: null })
   const [suitcase, setSuitcase] = useState([])
   const [suitcaseLoading, setSuitcaseLoading] = useState(false)
@@ -77,7 +77,7 @@ function App() {
 
   const ALL_TYPES = ['T-shirt', 'Crop-top', 'Hoodie', 'Sweat', 'Chemise', 'Polo', 'Top', 'Blouse', 'Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino', 'Robe', 'Veste', 'Blazer', 'Manteau', 'Parka', 'Trench', 'Cardigan', 'Pull', 'Maillot de bain', 'Pyjama', 'Basket', 'Bottes', 'Sandales', 'Escarpins', 'Accessoire', 'Sac', 'Casquette', 'Bonnet']
   const ALL_COLORS = ['Blanc', 'Noir', 'Gris', 'Beige', 'Marine', 'Bleu Ciel', 'Kaki', 'Vert Sapin', 'Bordeaux', 'Rouge', 'Rose Poudré', 'Rose', 'Moutarde', 'Jaune', 'Lilas', 'Violet', 'Terracotta', 'Orange', 'Or', 'Argent', 'Marron', 'Camel']
-  const ALL_ACTIVITIES = ['Quotidien', 'Sport', 'Soirée', 'Travail'] // ÉTAPE 3 PHASE 3
+  const ALL_ACTIVITIES = ['Quotidien', 'Sport', 'Soirée', 'Travail']
 
   const [newItem, setNewItem] = useState({ type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
@@ -85,7 +85,6 @@ function App() {
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
   
-  // Chargement persistance locale (ÉTAPE 5 PHASE 3)
   useEffect(() => {
     const savedSuitcase = localStorage.getItem('suitcase')
     const savedTravel = localStorage.getItem('travelData')
@@ -93,7 +92,6 @@ function App() {
     if (savedTravel) setTravelData(JSON.parse(savedTravel))
   }, [])
 
-  // Sauvegarde persistance locale (ÉTAPE 5 PHASE 3)
   useEffect(() => {
     localStorage.setItem('suitcase', JSON.stringify(suitcase))
     localStorage.setItem('travelData', JSON.stringify(travelData))
@@ -151,13 +149,10 @@ function App() {
   }
 
   const handleLogout = async () => {
-    // ÉTAPE 6 PHASE 3 : Confirmation avant déconnexion
     if (!window.confirm("Voulez-vous vraiment vous déconnecter ?")) return
-    
     setLoading(true)
     try {
       await supabase.auth.signOut()
-      // RESET COMPLET
       setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); 
       setSuitcase([]); setCurrentOutfit(null); setForgottenItems([]); setWeather(null); 
       setTravelData({ destination: '', lat: null, lon: null });
@@ -202,7 +197,7 @@ function App() {
     if (!currentOutfit) return;
     const ids = [currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id)
     await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).in('id', ids)
-    await fetchItems(uid); setView('dashboard')
+    await fetchItems(uid); setView('dashboard'); alert("Tenue validée ! ✨")
   }
 
   const handleCitySearch = (val) => {
@@ -240,7 +235,7 @@ function App() {
   }
 
   const handleRegister = async () => {
-    setLoading(true); const newUid = generateRandomUID(); await supabase.from('profiles').insert([{ id: newUid, name, gender }]); setUid(newUid); setView('success'); setLoading(false)
+    setLoading(true); const newUid = generateRandomUID(); await supabase.from('profiles').insert([{ id: newUid, name, gender }]); setUid(newUid); setView('dashboard'); setLoading(false)
   }
 
   const handleLogin = async () => {
@@ -248,7 +243,6 @@ function App() {
     const cleanCode = inputCode.replace(/[^A-Z0-9]/g, '')
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', cleanCode).single()
     if (!profile) { setError("Code invalide"); setLoading(false); return; }
-    if (profile.email) { setError("Email requis."); setLoading(false); return; }
     setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); await fetchItems(profile.id); setView('dashboard'); setLoading(false)
   }
 
@@ -273,7 +267,7 @@ function App() {
   }
 
   const formatUID = (val) => {
-    const cleaned = val.replace(/[^A-Z0-9]/g, '').slice(0, 8); 
+    const cleaned = val.replace(/[^A-Z0-9]/g, '').slice(0, 8)
     if (cleaned.length > 4) return `${cleaned.slice(0, 4)} - ${cleaned.slice(4)}`
     return cleaned
   }
@@ -352,6 +346,46 @@ function App() {
             </motion.div>
           )}
 
+          {/* SECTION STYLISTE (CORRIGÉ : PLUS DE PAGE BLANCHE) */}
+          {view === 'outfit-result' && (
+            <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%' }}>
+              <header style={{ marginBottom: '1.5rem' }}>
+                <h2 className="title" style={{ fontSize: '2.2rem' }}>Ton Styliste 🪄</h2>
+                {outfitLoading ? (
+                  <div style={{ textAlign: 'center', padding: '2rem' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" style={{ margin: '0 auto 1rem' }} /><p className="subtitle">L'IA prépare ton look...</p></div>
+                ) : currentOutfit ? (
+                  <p className="subtitle" style={{ fontSize: '1rem', lineHeight: '1.4' }}>{currentOutfit.explanation}</p>
+                ) : (
+                  <p className="subtitle">Aucune tenue générée.</p>
+                )}
+              </header>
+
+              {!outfitLoading && currentOutfit && (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+                    {[currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id).map(id => {
+                      const item = findItemById(id); if (!item) return null;
+                      return (
+                        <div key={id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1rem' }}>
+                          <div style={{ width: '60px', height: '60px', borderRadius: '12px', background: 'white', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '2rem', textAlign: 'center', lineHeight: '60px' }}>{item.icon}</div>}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 800, fontSize: '1rem' }}>{item.type}</div>
+                            <div className="subtitle" style={{ fontSize: '0.8rem', marginTop: 0 }}>{item.color} • {item.activity}</div>
+                          </div>
+                          <Sparkles size={18} color="var(--primary)" style={{ opacity: 0.5 }} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <button className="btn-primary" onClick={handleValidateOutfit}><Check size={20} /> Je porte cette tenue !</button>
+                    <button className="btn-secondary" onClick={handleGenerateOutfitRequest}><RefreshCw size={20} /> Autre proposition</button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          )}
+
           {view === 'travel' && (
             <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
@@ -361,54 +395,12 @@ function App() {
                   {suitcaseLoading ? <Loader2 className="animate-spin" /> : "Générer ma valise ✨"}
                 </button>
               </div>
-
-              <AnimatePresence>
-                {suitcase.length > 0 && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                    <div style={{ padding: '0 0.5rem' }}>{suitcase.map((item, idx) => (
-                      <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{ width: '22px', height: '22px', borderRadius: '6px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.checked && <Check size={14} color="white" />}</div>
-                        <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
-                      </div>
-                    ))}</div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-
-          {view === 'add-detail' && (
-            <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
-              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>{selectedImage && <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: '20px', maxHeight: '180px', objectFit: 'contain' }} />}</div>
-              <div className="glass-card" style={{ gap: '1.2rem', display: 'flex', flexDirection: 'column' }}>
-                <h2 className="title" style={{ fontSize: '1.4rem' }}>Vêtement détecté ✨</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 800, opacity: 0.6 }}>TYPE & COULEUR</div>
-                  <div style={{ display: 'flex', gap: '1rem' }}>
-                    <select className="input-styled" style={{ flex: 2 }} value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value, icon: getIconForType(e.target.value)})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                    <select className="input-styled" style={{ flex: 1 }} value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                  </div>
-                  
-                  {/* ÉTAPE 3 PHASE 3 : Sélection de l'activité */}
-                  <div style={{ fontSize: '0.8rem', fontWeight: 800, opacity: 0.6, marginTop: '0.5rem' }}>ACTIVITÉ</div>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    {ALL_ACTIVITIES.map(act => (
-                      <button key={act} onClick={() => setNewItem({...newItem, activity: act})} className={`filter-pill ${newItem.activity === act ? 'active' : ''}`} style={{ fontSize: '0.75rem' }}>{act}</button>
-                    ))}
-                  </div>
+              <div style={{ padding: '0 0.5rem' }}>{suitcase.map((item, idx) => (
+                <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ width: '22px', height: '22px', borderRadius: '6px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.checked && <Check size={14} color="white" />}</div>
+                  <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
                 </div>
-                <button onClick={handleAddItem} className="btn-primary" style={{ marginTop: '1rem' }} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Ajouter au dressing ✨"}</button>
-              </div>
-            </motion.div>
-          )}
-
-          {view === 'login' && (
-            <motion.div key="login" initial={{ x: 100 }} animate={{ x: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
-              <h2 className="title" style={{ textAlign: 'center' }}>Bon retour ! 👋</h2>
-              <p className="subtitle" style={{ textAlign: 'center' }}>Saisis ton code à 8 caractères pour retrouver ton dressing.</p>
-              <input type="text" placeholder="XXXX - XXXX" className="input-styled" style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '2px', marginTop: '2rem' }} value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value.toUpperCase())} maxLength={11} />
-              {error && <div style={{ color: '#f43f5e', fontSize: '0.8rem', marginTop: '1rem', textAlign: 'center', fontWeight: 700 }}><AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: '5px' }} /> {error}</div>}
-              <button className="btn-primary" onClick={handleLogin} style={{ marginTop: '2rem' }} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Me connecter"}</button>
+              ))}</div>
             </motion.div>
           )}
 
@@ -421,6 +413,17 @@ function App() {
                 <input type="email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isEmailConfirmed} style={{ marginBottom: '1rem', textAlign: 'center' }} />
                 {!isEmailConfirmed && <button className="btn-primary" onClick={handleLinkEmail} style={{ marginBottom: '1rem' }}>Lier mon email 🪄</button>}
                 <button className="btn-secondary" onClick={handleLogout} style={{ color: '#f43f5e', width: '100%' }} disabled={loading}><LogOut size={20} /> {loading ? "Déconnexion..." : "Déconnexion"}</button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* SPLASH & LOGIN VIEWS */}
+          {view === 'splash' && (
+            <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
+              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
+                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
+                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
               </div>
             </motion.div>
           )}

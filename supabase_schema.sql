@@ -1,10 +1,11 @@
 -- ########################################################
--- # MASTER SCHEMA FOR DRESSFLOW - SUPABASE
+-- # MASTER SCHEMA FOR DRESSFLOW - SUPABASE (SECURED)
 -- ########################################################
 
 -- 1. PROFILES TABLE
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY, -- 8-digit custom code
+  user_id UUID REFERENCES auth.users(id), -- Lien vers Supabase Auth (SÉCURITÉ)
   name TEXT,
   gender TEXT,
   email TEXT UNIQUE,
@@ -27,26 +28,35 @@ CREATE TABLE IF NOT EXISTS clothes (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. STORAGE SETUP
--- Assure-toi de créer manuellement le bucket 'clothes-images' s'il n'existe pas
--- INSERT INTO storage.buckets (id, name, public) VALUES ('clothes-images', 'clothes-images', true) ON CONFLICT (id) DO NOTHING;
-
--- 4. SECURITY (RLS)
+-- 3. SECURITY (RLS) - ÉTAPE 1 PHASE 1 (CORRIGÉ)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clothes ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Public Profiles Access" ON profiles;
-CREATE POLICY "Public Profiles Access" ON profiles FOR ALL USING (true) WITH CHECK (true);
+-- Politique pour PROFILES
+DROP POLICY IF EXISTS "Users can only access their own profile" ON profiles;
+CREATE POLICY "Users can only access their own profile" 
+ON profiles FOR ALL 
+USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Public Clothes Access" ON clothes;
-CREATE POLICY "Public Clothes Access" ON clothes FOR ALL USING (true) WITH CHECK (true);
+-- Politique pour CLOTHES
+DROP POLICY IF EXISTS "Users can only access their own clothes" ON clothes;
+CREATE POLICY "Users can only access their own clothes" 
+ON clothes FOR ALL 
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE profiles.id = clothes.profile_id 
+    AND profiles.user_id = auth.uid()
+  )
+);
 
--- 5. PERFORMANCE INDEXES
+-- 4. PERFORMANCE INDEXES
 CREATE INDEX IF NOT EXISTS idx_clothes_profile ON clothes(profile_id);
 CREATE INDEX IF NOT EXISTS idx_clothes_type ON clothes(type);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_unique ON profiles(email) WHERE email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 
--- 6. AUTOMATIC UPDATED_AT TRIGGER
+-- 5. TRIGGER UPDATED_AT
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
