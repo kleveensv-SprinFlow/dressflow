@@ -6,7 +6,8 @@ import {
   Tag, Palette, Sun, Briefcase, X, ArrowRight, Loader2,
   Settings, Mail, ShieldCheck, LogOut, AlertCircle,
   Thermometer, CloudRain, Wind, Wand2, RefreshCw,
-  Calendar, Trash2, Heart, ShoppingBag, Home, User
+  Calendar, Trash2, Heart, ShoppingBag, Home, User,
+  LifeBuoy, FileText, ShieldAlert
 } from 'lucide-react'
 
 // Styles & DB & Services
@@ -17,6 +18,34 @@ import { getLocalWeather } from './services/weather'
 
 // Assets
 import logoImg from './assets/logo.png'
+
+const RotatingClothes = () => {
+  const icons = ['👕', '👖', '👗', '🧥', '👟', '👜']
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % icons.length)
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [])
+
+  return (
+    <div style={{ height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5rem' }}>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={icons[index]}
+          initial={{ y: 20, opacity: 0, rotate: -10 }}
+          animate={{ y: 0, opacity: 1, rotate: 0 }}
+          exit={{ y: -20, opacity: 0, rotate: 10 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
+          {icons[index]}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
 
 function App() {
   const [view, setView] = useState('splash') 
@@ -169,6 +198,28 @@ function App() {
       alert("Compte sécurisé ! ✨")
     }
     setLoading(false)
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Es-tu sûr(e) de vouloir supprimer définitivement ton compte et tous tes vêtements ? Cette action est irréversible.")) return
+
+    setLoading(true)
+    try {
+      // 1. Supprimer les vêtements
+      await supabase.from('clothes').delete().eq('profile_id', uid)
+      // 2. Supprimer le profil
+      await supabase.from('profiles').delete().eq('id', uid)
+      
+      alert("Ton compte a été supprimé. On espère te revoir bientôt ! 👋")
+      setView('splash')
+      setUid('')
+      setName('')
+      setItems([])
+    } catch (err) {
+      alert("Erreur lors de la suppression.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleRegister = async () => {
@@ -458,19 +509,39 @@ function App() {
 
           {/* SETTINGS VIEW */}
           {view === 'settings' && (
-            <motion.div key="settings" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="dashboard-container">
-              <h2 className="title" style={{ fontSize: '2rem', marginBottom: '2rem' }}>Mon Profil</h2>
-              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.4)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                  <Mail size={24} color="var(--primary)" />
-                  <h3 style={{ fontSize: '1.1rem' }}>Lier mon compte</h3>
+            <motion.div key="settings" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="dashboard-container" style={{ gap: '1rem', overflowY: 'auto' }}>
+              <h2 className="title" style={{ fontSize: '2rem', marginBottom: '1rem' }}>Mon Profil</h2>
+              
+              <div className="glass-card" style={{ padding: '1.2rem', background: 'rgba(255,255,255,0.4)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
+                  <Mail size={20} color="var(--primary)" />
+                  <h3 style={{ fontSize: '1rem' }}>Sécuriser mon compte</h3>
                 </div>
-                <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
-                <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.5rem' }}>Sauvegarder</button>
+                <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '0.8rem' }} />
+                <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.8rem', padding: '0.8rem', fontSize: '0.9rem' }}>Sauvegarder l'email</button>
               </div>
-              <div className="glass-card" style={{ padding: '1.5rem', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
-                <button onClick={() => setView('splash')} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '1rem', width: '100%' }}>
-                  <LogOut size={24} /> Déconnexion
+
+              <div className="glass-card" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}>
+                  <LifeBuoy size={20} color="var(--primary)" />
+                  <span style={{ fontWeight: 600 }}>Contact & Support</span>
+                </button>
+                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}>
+                  <FileText size={20} color="var(--primary)" />
+                  <span style={{ fontWeight: 600 }}>Mentions Légales</span>
+                </button>
+                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}>
+                  <ShieldAlert size={20} color="var(--primary)" />
+                  <span style={{ fontWeight: 600 }}>Confidentialité</span>
+                </button>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1.2rem', background: 'rgba(244, 63, 94, 0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <button onClick={() => setView('splash')} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <LogOut size={20} /> Déconnexion
+                </button>
+                <button onClick={handleDeleteAccount} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <Trash2 size={20} /> Supprimer mon compte
                 </button>
               </div>
             </motion.div>
@@ -490,8 +561,8 @@ function App() {
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="logo-container">
-                <motion.img src={logoImg} alt="Dressflow Logo" style={{ width: '180px', height: 'auto', marginBottom: '1rem' }} initial={{ scale: 0.8 }} animate={{ scale: 1 }} />
-                <h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1>
+                <RotatingClothes />
+                <h1 className="title" style={{ marginTop: '1rem' }}>Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1>
                 <p className="subtitle">L'IA au service de votre style.</p>
               </div>
               <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
@@ -511,7 +582,12 @@ function App() {
           {view === 'register' && (
             <motion.div key="register" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
               <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
-              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Nouveau Dressing</h2>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <RotatingClothes />
+              </div>
+
+              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2.5rem', textAlign: 'center' }}>Nouveau Dressing</h2>
               <input type="text" placeholder="Ton prénom" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} />
               <div className="gender-toggle">
                 <button className={`gender-btn ${gender === 'female' ? 'active' : ''}`} onClick={() => setGender('female')}>Femme</button>
