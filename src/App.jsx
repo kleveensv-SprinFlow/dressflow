@@ -4,13 +4,12 @@ import {
   Shirt, Copy, ChevronLeft, Check, LogIn, Share2, 
   Plus, Camera, Image as ImageIcon, Sparkles, 
   Tag, Palette, Sun, Briefcase, X, ArrowRight, Loader2,
-  Settings, Mail, ShieldCheck, LogOut
+  Settings, Mail, ShieldCheck, LogOut, AlertCircle
 } from 'lucide-react'
 
 // Styles & DB
 import './styles/index.css'
 import { supabase } from './lib/supabase'
-import { removeBackground } from './services/ai'
 
 // Assets
 import logoImg from './assets/logo.png'
@@ -28,7 +27,8 @@ function App() {
   const [error, setError] = useState(null)
   
   // Image handling
-  const [selectedImage, setSelectedImage] = useState(null)
+  const [selectedImage, setSelectedImage] = useState(null) // Local URL for preview
+  const [originalFile, setOriginalFile] = useState(null) // Real file to upload
   const fileInputRef = useRef(null)
   const camInputRef = useRef(null)
 
@@ -44,14 +44,6 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', gender)
   }, [gender])
-
-  // Handle auto-transition from loading-ai to add-detail
-  useEffect(() => {
-    if (view === 'loading-ai') {
-      const timer = setTimeout(() => setView('add-detail'), 2500)
-      return () => clearTimeout(timer)
-    }
-  }, [view])
 
   // --- DATABASE LOGIC ---
 
@@ -112,26 +104,54 @@ function App() {
     setLoading(false)
   }
 
+  const uploadImageToStorage = async (file) => {
+    const fileName = `${uid}-${Date.now()}.jpg`
+    const { data, error } = await supabase.storage
+      .from('clothes-images')
+      .upload(fileName, file)
+
+    if (error) throw error
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('clothes-images')
+      .getPublicUrl(fileName)
+
+    return publicUrl
+  }
+
   const handleAddItem = async () => {
     setLoading(true)
-    const { error: addError } = await supabase
-      .from('clothes')
-      .insert([{
-        profile_id: uid,
-        type: newItem.type,
-        color: newItem.color,
-        season: newItem.season,
-        activity: newItem.activity,
-        icon: newItem.icon
-      }])
-    
-    if (addError) {
-      alert("Erreur lors de l'ajout du vêtement.")
-    } else {
+    try {
+      let finalImageUrl = null
+      
+      if (originalFile) {
+        finalImageUrl = await uploadImageToStorage(originalFile)
+      }
+
+      const { error: addError } = await supabase
+        .from('clothes')
+        .insert([{
+          profile_id: uid,
+          type: newItem.type,
+          color: newItem.color,
+          season: newItem.season,
+          activity: newItem.activity,
+          icon: newItem.icon,
+          image_url: finalImageUrl
+        }])
+      
+      if (addError) throw addError
+
       await fetchItems(uid)
+      setSelectedImage(null)
+      setOriginalFile(null)
       setView('dashboard')
+    } catch (err) {
+      console.error(err)
+      alert("Erreur lors de l'ajout : " + err.message)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const handleLinkEmail = async () => {
@@ -152,8 +172,9 @@ function App() {
   const handleFileChange = (e) => {
     const file = e.target.files[0]
     if (file) {
+      setOriginalFile(file)
       setSelectedImage(URL.createObjectURL(file))
-      setView('loading-ai')
+      setView('add-detail') // Direct to details view
     }
   }
 
@@ -220,6 +241,25 @@ function App() {
             </motion.div>
           )}
 
+          {/* LOGIN VIEW */}
+          {view === 'login' && (
+            <motion.div key="login" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
+              <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
+              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Connexion</h2>
+              <input 
+                type="text" 
+                placeholder="Ex: AB12 - CD34" 
+                className="input-styled" 
+                value={formatUID(inputCode)} 
+                onChange={(e) => setInputCode(e.target.value)} 
+                maxLength={11}
+              />
+              <button className="btn-primary" onClick={handleLogin} disabled={inputCode.length < 8 || loading} style={{ marginTop: '2rem' }}>
+                {loading ? <Loader2 className="animate-spin" /> : <>Se connecter <ArrowRight size={20} /></>}
+              </button>
+            </motion.div>
+          )}
+
           {/* REGISTER VIEW */}
           {view === 'register' && (
             <motion.div key="register" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
@@ -243,7 +283,7 @@ function App() {
               <p className="subtitle" style={{ margin: '0 auto 2rem auto' }}>Note bien ce code unique pour ton dressing.</p>
               <div className="uid-box"><div className="uid-text">{uid}</div></div>
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button className="btn-primary" onClick={handleShare} style={{ flex: 1 }}>{copied ? 'Copié !' : 'Copier'}</button>
+                <button className="btn-primary" onClick={() => { navigator.clipboard.writeText(uid); setCopied(true); setTimeout(() => setCopied(false), 2000); }} style={{ flex: 1 }}>{copied ? 'Copié !' : 'Copier'}</button>
                 <button className="btn-primary" onClick={handleShare} style={{ background: 'rgba(255,255,255,0.8)', color: '#000', width: '80px', boxShadow: 'none' }}><Share2 size={24} /></button>
               </div>
               <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ marginTop: '2.5rem' }}>Accéder à mon dressing</button>
@@ -269,7 +309,13 @@ function App() {
                 <div className="item-grid">
                   {items.map(item => (
                     <div key={item.id} className="item-card">
-                      <div className="item-image">{item.icon || '👕'}</div>
+                      <div className="item-image">
+                        {item.image_url ? (
+                          <img src={item.image_url} alt={item.type} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'var(--radius-md)' }} />
+                        ) : (
+                          item.icon || '👕'
+                        )}
+                      </div>
                       <div className="item-info">
                         <div className="item-type">{item.type}</div>
                         <div className="item-meta">{item.activity} • {item.season}</div>
@@ -325,14 +371,6 @@ function App() {
             </motion.div>
           )}
 
-          {view === 'loading-ai' && (
-            <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
-              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>✨</motion.div>
-              <h2 className="title" style={{ fontSize: '1.8rem' }}>Analyse par l'IA...</h2>
-              <p className="subtitle" style={{ margin: 'auto' }}>Détourage et détection automatique des caractéristiques.</p>
-            </motion.div>
-          )}
-
           {view === 'add-detail' && (
             <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container" style={{ width: '100%' }}>
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
@@ -341,7 +379,7 @@ function App() {
                 ) : (
                   <div style={{ fontSize: '6rem' }}>👗</div>
                 )}
-                <p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Fond supprimé ✨</p>
+                <p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Aperçu de la photo ✨</p>
               </div>
               
               <div className="glass-card" style={{ gap: '1.5rem', display: 'flex', flexDirection: 'column' }}>
