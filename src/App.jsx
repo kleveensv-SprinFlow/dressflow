@@ -43,7 +43,7 @@ function App() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [isEmailConfirmed, setIsEmailConfirmed] = useState(false)
-  const [uid, setUid] = useState('') // Local Code (ex: AB12 - CD34)
+  const [uid, setUid] = useState('') 
   const [inputCode, setInputCode] = useState('')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -78,26 +78,16 @@ function App() {
   
   useEffect(() => { 
     checkUserSession()
-    
-    // Écouteur de session critique pour la sécurité
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const userEmail = session.user.email
         const userUuid = session.user.id
-        
-        // BUG FIX ÉTAPE 1 PHASE 2 : Liaison uniquement après confirmation
-        if (uid) {
-          // Si on a un profil local (code 8 chiffres), on le lie maintenant car l'email est prouvé
-          await supabase.from('profiles').update({ email: userEmail, user_id: userUuid }).eq('id', uid)
-        }
-        
-        setIsEmailConfirmed(true)
-        setEmail(userEmail)
-        await syncProfile(userEmail)
+        if (uid) await supabase.from('profiles').update({ email: userEmail, user_id: userUuid }).eq('id', uid)
+        setIsEmailConfirmed(true); setEmail(userEmail); await syncProfile(userEmail);
       }
     })
     return () => subscription.unsubscribe()
-  }, [uid]) // Dépendance sur uid pour permettre la liaison
+  }, [uid])
 
   useEffect(() => {
     if (['dashboard', 'outfit-result', 'settings', 'travel'].includes(view)) {
@@ -131,21 +121,37 @@ function App() {
     setLoading(false)
   }
 
-  const handleLinkEmail = async () => {
-    if (!email || isEmailConfirmed) return; setLoading(true)
+  const handleLogout = async () => {
+    setLoading(true)
     try {
-      // SOLUTION ÉTAPE 1 PHASE 2 : Pas d'update immédiat en base.
-      const { error } = await supabase.auth.signInWithOtp({ 
-        email, 
-        options: { emailRedirectTo: 'com.dressflow.app://login' } 
-      })
-      if (error) throw error
-      alert("Lien magique envoyé ! 🪄 Clique sur le lien dans ton email pour confirmer et sécuriser ton compte.")
-    } catch (err) { 
-      alert("Erreur : " + err.message) 
+      await supabase.auth.signOut()
+      // RESET TOTAL DES ÉTATS (ÉTAPE 2 PHASE 2)
+      setUid('')
+      setName('')
+      setEmail('')
+      setItems([])
+      setIsEmailConfirmed(false)
+      setSuitcase([])
+      setCurrentOutfit(null)
+      setForgottenItems([])
+      setError(null)
+      setTravelData({ destination: '', lat: null, lon: null })
+      setView('splash')
+    } catch (err) {
+      alert("Erreur déconnexion")
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleLinkEmail = async () => {
+    if (!email || isEmailConfirmed) return; setLoading(true)
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
+      if (error) throw error
+      alert("Lien magique envoyé ! ✨")
+    } catch (err) { alert(err.message) }
+    finally { setLoading(false) }
   }
 
   const handleAddItem = async () => {
@@ -162,12 +168,12 @@ function App() {
   }
 
   const handleGenerateOutfitRequest = async () => {
-    if (items.length < 3) { alert("Ajoute plus d'habits pour générer une tenue !"); return; }
+    if (items.length < 3) { alert("Ajoute plus d'habits !"); return; }
     setOutfitLoading(true)
     try {
       const result = await generateOutfit(items, weather || await getLocalWeather())
       setCurrentOutfit(result); setView('outfit-result')
-    } catch (err) { alert("Erreur génération") }
+    } catch (err) { alert("Erreur") }
     finally { setOutfitLoading(false) }
   }
 
@@ -175,7 +181,7 @@ function App() {
     if (!currentOutfit) return;
     const ids = [currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id)
     await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).in('id', ids)
-    await fetchItems(uid); alert("Super style ! Tenue validée. ✨"); setView('dashboard')
+    await fetchItems(uid); alert("Super style ! ✨"); setView('dashboard')
   }
 
   const handleCitySearch = async (val) => {
@@ -189,18 +195,18 @@ function App() {
   }
 
   const handleGenerateSuitcase = async () => {
-    if (!travelData.lat) { alert("Choisis d'abord une destination !"); return; }
+    if (!travelData.lat) { alert("Destination ?"); return; }
     setSuitcaseLoading(true)
     try {
       const destWeather = await getLocalWeather(travelData.lat, travelData.lon)
       const suggestions = items.filter(item => getItemWeatherScore(item, destWeather.temp) > 0).slice(0, 10).map(s => ({ ...s, checked: false }))
       setSuitcase(suggestions)
-    } catch (err) { alert("Erreur météo destination") }
+    } catch (err) { alert("Erreur") }
     finally { setSuitcaseLoading(false) }
   }
 
   const handleDeleteItem = async (id) => {
-    if (!window.confirm("Supprimer ce vêtement ?")) return
+    if (!window.confirm("Supprimer ?")) return
     setLoading(true); await supabase.from('clothes').delete().eq('id', id); await fetchItems(uid); setSelectedItem(null); setLoading(false)
   }
 
@@ -215,7 +221,7 @@ function App() {
   const handleLogin = async () => {
     setLoading(true); const { data: profile } = await supabase.from('profiles').select('*').eq('id', inputCode.replace(/[^A-Z0-9]/g, '')).single()
     if (!profile) { setError("Code invalide"); setLoading(false); return; }
-    if (profile.email) { setError("Compte sécurisé par email."); setLoading(false); return; }
+    if (profile.email) { setError("Email requis."); setLoading(false); return; }
     setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); await fetchItems(profile.id); setView('dashboard'); setLoading(false)
   }
 
@@ -326,29 +332,6 @@ function App() {
             </motion.div>
           )}
 
-          <AnimatePresence>
-            {selectedItem && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => { setSelectedItem(null); setIsEditing(false); }}>
-                <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem', height: 'auto' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '1.6rem' }}>{isEditing ? 'Modifier' : 'Détails'}</h2><button onClick={() => { setSelectedItem(null); setIsEditing(false); }} style={{ background: 'none', border: 'none' }}><X size={24} /></button></div>
-                  {isEditing ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      <select className="input-styled" value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                      <select className="input-styled" value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                      <button className="btn-primary" onClick={handleUpdateItem}><Save size={20} /> Enregistrer</button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}><div style={{ width: '150px', height: '150px', margin: '0 auto', background: 'white', borderRadius: '20px', overflow: 'hidden' }}>{selectedItem.image_url ? <img src={selectedItem.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '4rem', lineHeight: '150px' }}>{selectedItem.icon}</div>}</div></div>
-                      <div style={{ marginBottom: '2rem' }}><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{selectedItem.type} {selectedItem.color}</div><div className="subtitle">{selectedItem.activity} • {selectedItem.season}</div></div>
-                      <div style={{ display: 'flex', gap: '1rem' }}><button className="btn-primary" style={{ flex: 2 }} onClick={() => handleUpdateLastWorn(selectedItem)}><Check size={20} /> Je porte ça !</button><button className="btn-secondary" onClick={() => { setIsEditing(true); setEditForm({ type: selectedItem.type, color: selectedItem.color, season: selectedItem.season }); }}><Edit3 size={20} /></button><button className="btn-secondary" style={{ color: '#f43f5e' }} onClick={() => handleDeleteItem(selectedItem.id)}><Trash2 size={20} /></button></div>
-                    </>
-                  )}
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {view === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
               <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
@@ -357,7 +340,7 @@ function App() {
                 <h3 className="title" style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>{name || 'Utilisateur'}</h3>
                 <input type="email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isEmailConfirmed} style={{ marginBottom: '1rem' }} />
                 {!isEmailConfirmed && <button className="btn-primary" onClick={handleLinkEmail} style={{ marginBottom: '1rem' }}>Lier mon email 🪄</button>}
-                <button className="btn-secondary" onClick={async () => { await supabase.auth.signOut(); setIsEmailConfirmed(false); setUid(''); setView('splash'); }} style={{ color: '#f43f5e' }}><LogOut size={20} /> Déconnexion</button>
+                <button className="btn-secondary" onClick={handleLogout} style={{ color: '#f43f5e' }} disabled={loading}><LogOut size={20} /> {loading ? "Déconnexion..." : "Déconnexion"}</button>
               </div>
             </motion.div>
           )}
