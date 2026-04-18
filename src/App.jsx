@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Shirt, Copy, ChevronLeft, Check, LogIn, Share2, 
@@ -27,6 +27,11 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   
+  // Image handling
+  const [selectedImage, setSelectedImage] = useState(null)
+  const fileInputRef = useRef(null)
+  const camInputRef = useRef(null)
+
   // Current Item state (for add flow)
   const [newItem, setNewItem] = useState({
     type: 'Robe',
@@ -144,6 +149,14 @@ function App() {
     setLoading(false)
   }
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setSelectedImage(URL.createObjectURL(file))
+      setView('loading-ai')
+    }
+  }
+
   const handleShare = async () => {
     if (navigator.share) {
       try {
@@ -187,7 +200,7 @@ function App() {
           
           {/* SPLASH VIEW */}
           {view === 'splash' && (
-            <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="logo-container">
                 <motion.img 
                   src={logoImg} 
@@ -195,7 +208,7 @@ function App() {
                   style={{ width: '180px', height: 'auto', marginBottom: '1rem' }}
                   initial={{ scale: 0.8 }}
                   animate={{ scale: 1 }}
-                  transition={{ type: 'spring', damping: 10 }}
+                  transition={{ type: 'spring', damping: 12 }}
                 />
                 <h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1>
                 <p className="subtitle">L'IA au service de votre style.</p>
@@ -210,7 +223,7 @@ function App() {
           {/* REGISTER VIEW */}
           {view === 'register' && (
             <motion.div key="register" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
-              <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none' }}><ChevronLeft size={20} /> Retour</button>
+              <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Nouveau Dressing</h2>
               <input type="text" placeholder="Ton prénom" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} />
               <div className="gender-toggle">
@@ -230,7 +243,7 @@ function App() {
               <p className="subtitle" style={{ margin: '0 auto 2rem auto' }}>Note bien ce code unique pour ton dressing.</p>
               <div className="uid-box"><div className="uid-text">{uid}</div></div>
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button className="btn-primary" onClick={() => { navigator.clipboard.writeText(uid); setCopied(true); setTimeout(() => setCopied(false), 2000); }} style={{ flex: 1 }}>{copied ? 'Copié !' : 'Copier'}</button>
+                <button className="btn-primary" onClick={handleShare} style={{ flex: 1 }}>{copied ? 'Copié !' : 'Copier'}</button>
                 <button className="btn-primary" onClick={handleShare} style={{ background: 'rgba(255,255,255,0.8)', color: '#000', width: '80px', boxShadow: 'none' }}><Share2 size={24} /></button>
               </div>
               <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ marginTop: '2.5rem' }}>Accéder à mon dressing</button>
@@ -272,7 +285,7 @@ function App() {
           {/* SETTINGS VIEW */}
           {view === 'settings' && (
             <motion.div key="settings" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="glass-card my-auto">
-              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none' }}><ChevronLeft size={20} /> Retour</button>
+              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
               <h2 className="title" style={{ fontSize: '2rem', marginBottom: '2rem' }}>Paramètres</h2>
               
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.4)' }}>
@@ -300,15 +313,20 @@ function App() {
                 <h2 className="title" style={{ fontSize: '1.6rem' }}>Ajouter un habit</h2>
                 <button onClick={() => setView('dashboard')} style={{ background: 'none', border: 'none' }}><X size={28} /></button>
               </div>
+              
+              {/* Hidden Inputs */}
+              <input type="file" accept="image/*" capture="environment" ref={camInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+              <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button onClick={() => { setView('loading-ai') }} className="btn-primary" style={{ flex: 1, height: '140px', flexDirection: 'column', background: 'white', color: 'var(--text-main)', border: '1px solid var(--border)' }}><Camera size={32} /> Photo</button>
-                <button onClick={() => { setView('loading-ai') }} className="btn-primary" style={{ flex: 1, height: '140px', flexDirection: 'column', background: 'white', color: 'var(--text-main)', border: '1px solid var(--border)' }}><ImageIcon size={32} /> Galerie</button>
+                <button onClick={() => camInputRef.current.click()} className="btn-primary" style={{ flex: 1, height: '140px', flexDirection: 'column', background: 'white', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}><Camera size={32} /> Photo</button>
+                <button onClick={() => fileInputRef.current.click()} className="btn-primary" style={{ flex: 1, height: '140px', flexDirection: 'column', background: 'white', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}><ImageIcon size={32} /> Galerie</button>
               </div>
             </motion.div>
           )}
 
           {view === 'loading-ai' && (
-            <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center' }}>
+            <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>✨</motion.div>
               <h2 className="title" style={{ fontSize: '1.8rem' }}>Analyse par l'IA...</h2>
               <p className="subtitle" style={{ margin: 'auto' }}>Détourage et détection automatique des caractéristiques.</p>
@@ -318,11 +336,15 @@ function App() {
           {view === 'add-detail' && (
             <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container" style={{ width: '100%' }}>
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '6rem' }}>👗</div>
+                {selectedImage ? (
+                  <img src={selectedImage} alt="Selected" style={{ width: '100%', borderRadius: 'var(--radius-md)', maxHeight: '200px', objectFit: 'contain' }} />
+                ) : (
+                  <div style={{ fontSize: '6rem' }}>👗</div>
+                )}
                 <p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Fond supprimé ✨</p>
               </div>
               
-              <div className="glass-card" style={{ gap: '1.5rem' }}>
+              <div className="glass-card" style={{ gap: '1.5rem', display: 'flex', flexDirection: 'column' }}>
                 <h2 className="title" style={{ fontSize: '1.6rem' }}>Vérification</h2>
                 
                 <div>
@@ -343,7 +365,7 @@ function App() {
                   </div>
                 </div>
 
-                <button onClick={handleAddItem} className="btn-primary" disabled={loading}>
+                <button onClick={handleAddItem} className="btn-primary" disabled={loading} style={{ marginTop: '1rem' }}>
                   {loading ? <Loader2 className="animate-spin" /> : <>Valider et ajouter</>}
                 </button>
               </div>
