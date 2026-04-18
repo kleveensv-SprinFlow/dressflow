@@ -60,8 +60,11 @@ function App() {
   const [travelData, setTravelData] = useState({ destination: '', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd'), lat: null, lon: null })
   const [suitcase, setSuitcase] = useState([])
   const [suitcaseLoading, setSuitcaseLoading] = useState(false)
+  
+  // Outfit
   const [currentOutfit, setCurrentOutfit] = useState(null)
   const [outfitLoading, setOutfitLoading] = useState(false)
+
   const [forgottenItems, setForgottenItems] = useState([])
   const [showAlertModal, setShowAlertModal] = useState(false)
   const [loadingPhrase, setLoadingPhrase] = useState("Analyse de ton dressing...")
@@ -115,30 +118,37 @@ function App() {
   }
 
   const handleAddItem = async () => {
-    if (!uid) { alert("Session expirée. Reconnecte-toi."); return; }
-    setLoading(true)
+    if (!uid) return; setLoading(true)
     try {
-      const { error } = await supabase.from('clothes').insert([{
-        profile_id: uid,
-        ...newItem,
-        image_url: selectedImage,
-        last_worn_date: new Date().toISOString()
-      }])
-      if (error) throw error
-      await fetchItems(uid)
-      setNewItem({ type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
-      setSelectedImage(null)
-      setView('dashboard')
-    } catch (err) {
-      alert("Erreur lors de l'ajout : " + err.message)
-    } finally {
-      setLoading(false)
-    }
+      await supabase.from('clothes').insert([{ profile_id: uid, ...newItem, image_url: selectedImage, last_worn_date: new Date().toISOString() }])
+      await fetchItems(uid); setView('dashboard'); setSelectedImage(null)
+    } catch (err) { alert(err.message) }
+    finally { setLoading(false) }
   }
 
   const handleUpdateLastWorn = async (item) => {
     await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).eq('id', item.id)
     await fetchItems(uid); setSelectedItem(null);
+  }
+
+  const handleGenerateOutfitRequest = async () => {
+    if (items.length < 3) { alert("Ajoute plus d'habits pour générer une tenue !"); return; }
+    setOutfitLoading(true)
+    try {
+      const result = await generateOutfit(items, weather || await getLocalWeather())
+      setCurrentOutfit(result)
+      setView('outfit-result')
+    } catch (err) { alert("Erreur génération") }
+    finally { setOutfitLoading(false) }
+  }
+
+  const handleValidateOutfit = async () => {
+    if (!currentOutfit) return;
+    const ids = [currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id)
+    await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).in('id', ids)
+    await fetchItems(uid)
+    alert("Super style ! Tenue validée. ✨")
+    setView('dashboard')
   }
 
   const handleDeleteItem = async (id) => {
@@ -201,6 +211,8 @@ function App() {
     if (!travelData.lat) return; setSuitcaseLoading(true); const weatherData = await getLocalWeather(travelData.lat, travelData.lon); setSuitcase(items.filter(item => getItemWeatherScore(item, weatherData.temp) > 0).slice(0, 8).map(s => ({ ...s, checked: false }))); setSuitcaseLoading(false)
   }
 
+  const findItemById = (id) => items.find(item => item.id === id)
+
   const filteredAndSortedItems = useMemo(() => {
     let list = [...items]
     if (activeFilter !== 'Tous') {
@@ -227,7 +239,7 @@ function App() {
       <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}><Home size={22} /><span>Dressing</span></div>
       <div className={`nav-item ${view === 'travel' ? 'active' : ''}`} onClick={() => setView('travel')}><Plane size={22} /><span>Voyage</span></div>
       <div className="nav-item" onClick={() => setView('add-choice')}><div className="add-nav-btn"><Plus size={30} /></div><span>Ajouter</span></div>
-      <div className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => setView('outfit-result')}><Wand2 size={22} /><span>Styliste</span></div>
+      <div className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => handleGenerateOutfitRequest()}><Wand2 size={22} /><span>Styliste</span></div>
       <div className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}><User size={22} /><span>Profil</span></div>
     </div>
   )
@@ -254,6 +266,27 @@ function App() {
             </motion.div>
           )}
 
+          {view === 'outfit-result' && currentOutfit && (
+            <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%' }}>
+              <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Ton Styliste 🪄</h2><p className="subtitle">{currentOutfit.explanation}</p></header>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+                {[currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id).map(id => {
+                  const item = findItemById(id); if (!item) return null;
+                  return (
+                    <div key={id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1rem' }}>
+                      <div style={{ width: '60px', height: '60px', borderRadius: '12px', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '2rem' }}>{item.icon}</div>}</div>
+                      <div><div style={{ fontWeight: 800 }}>{item.type}</div><div className="subtitle" style={{ fontSize: '0.8rem' }}>{item.color}</div></div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <button className="btn-primary" onClick={handleValidateOutfit}><Check size={20} /> Je porte cette tenue !</button>
+                <button className="btn-secondary" onClick={handleGenerateOutfitRequest}><RefreshCw size={20} /> Autre proposition</button>
+              </div>
+            </motion.div>
+          )}
+
           <AnimatePresence>
             {selectedItem && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => { setSelectedItem(null); setIsEditing(false); }}>
@@ -277,6 +310,41 @@ function App() {
             )}
           </AnimatePresence>
 
+          {/* TRAVEL & OTHERS */}
+          {view === 'travel' && (
+            <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
+              <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                <input type="text" placeholder="Où pars-tu ?" className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} />
+                <button className="btn-primary" onClick={handleGenerateSuitcase} style={{ marginTop: '1rem' }}>Générer ma valise ✨</button>
+              </div>
+              <div style={{ padding: '0 0.5rem' }}>{suitcase.map((item, idx) => (
+                <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ width: '20px', height: '20px', borderRadius: '5px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent' }} />
+                  <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
+                </div>
+              ))}</div>
+            </motion.div>
+          )}
+
+          {/* AUTH FLOWS */}
+          {view === 'splash' && (
+            <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
+              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
+                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
+                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
+              </div>
+            </motion.div>
+          )}
+          {view === 'register' && (
+            <motion.div key="register" initial={{ x: 100 }} animate={{ x: 0 }} className="glass-card my-auto">
+              <h2 className="title" style={{ textAlign: 'center' }}>Nouveau Dressing</h2>
+              <input type="text" placeholder="Ton prénom" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} style={{ marginTop: '2rem' }} />
+              <div className="gender-toggle"><button className={`gender-btn ${gender === 'female' ? 'active' : ''}`} onClick={() => setGender('female')}>Femme</button><button className={`gender-btn ${gender === 'male' ? 'active' : ''}`} onClick={() => setGender('male')}>Homme</button></div>
+              <button className="btn-primary" onClick={handleRegister}>C'est parti</button>
+            </motion.div>
+          )}
           {view === 'add-choice' && (
             <motion.div key="add-choice" initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderRadius: '40px 40px 0 0', padding: '2rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '1.6rem' }}>Ajouter</h2><button onClick={() => setView('dashboard')} style={{ background: 'none', border: 'none' }}><X size={28} /></button></div>
@@ -285,7 +353,6 @@ function App() {
               <div style={{ display: 'flex', gap: '1rem' }}><button onClick={() => camInputRef.current.click()} className="btn-primary" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #ddd' }}><Camera size={24} /> Photo</button><button onClick={() => fileInputRef.current.click()} className="btn-primary" style={{ flex: 1, background: 'white', color: 'black', border: '1px solid #ddd' }}><ImageIcon size={24} /> Galerie</button></div>
             </motion.div>
           )}
-
           {view === 'add-detail' && (
             <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>{selectedImage && <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: '20px', maxHeight: '180px', objectFit: 'contain' }} />}</div>
@@ -299,12 +366,10 @@ function App() {
               </div>
             </motion.div>
           )}
-
-          {(view === 'loading-ai' || view === 'loading-outfit') && (
-            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', width: '100%', marginTop: '5rem' }}><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>🪄</motion.div><h2 className="title">{loadingPhrase}</h2></motion.div>
+          {outfitLoading && (
+            <motion.div key="loading-outfit" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', width: '100%', marginTop: '5rem' }}><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>🪄</motion.div><h2 className="title">Génération de ta tenue...</h2></motion.div>
           )}
 
-          {/* FALLBACKS */}
           {view === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
               <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
@@ -316,8 +381,7 @@ function App() {
               </div>
             </motion.div>
           )}
-          
-          {/* CITY MODAL */}
+
           {showCityModal && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="modal-overlay" onClick={() => setShowCityModal(false)}>
               <motion.div className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}>
