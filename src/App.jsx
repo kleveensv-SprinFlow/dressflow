@@ -43,7 +43,7 @@ function App() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [isEmailConfirmed, setIsEmailConfirmed] = useState(false)
-  const [uid, setUid] = useState('')
+  const [uid, setUid] = useState('') // Local Code (ex: AB12 - CD34)
   const [inputCode, setInputCode] = useState('')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -51,14 +51,11 @@ function App() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState(null)
-  
-  // Weather & Cities
   const [weather, setWeather] = useState(null)
   const [citySearch, setCitySearch] = useState('')
   const [cityResults, setCityResults] = useState([])
   const [showCityModal, setShowCityModal] = useState(false)
-  const [cityModalMode, setCityModalMode] = useState('home') // 'home' or 'travel'
-
+  const [cityModalMode, setCityModalMode] = useState('home')
   const [activeFilter, setActiveFilter] = useState('Tous')
   const [travelData, setTravelData] = useState({ destination: '', lat: null, lon: null })
   const [suitcase, setSuitcase] = useState([])
@@ -78,13 +75,29 @@ function App() {
   const [selectedImage, setSelectedImage] = useState(null)
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
+  
   useEffect(() => { 
     checkUserSession()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) { setIsEmailConfirmed(true); setEmail(session.user.email); syncProfile(session.user.email); }
+    
+    // Écouteur de session critique pour la sécurité
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const userEmail = session.user.email
+        const userUuid = session.user.id
+        
+        // BUG FIX ÉTAPE 1 PHASE 2 : Liaison uniquement après confirmation
+        if (uid) {
+          // Si on a un profil local (code 8 chiffres), on le lie maintenant car l'email est prouvé
+          await supabase.from('profiles').update({ email: userEmail, user_id: userUuid }).eq('id', uid)
+        }
+        
+        setIsEmailConfirmed(true)
+        setEmail(userEmail)
+        await syncProfile(userEmail)
+      }
     })
     return () => subscription.unsubscribe()
-  }, [])
+  }, [uid]) // Dépendance sur uid pour permettre la liaison
 
   useEffect(() => {
     if (['dashboard', 'outfit-result', 'settings', 'travel'].includes(view)) {
@@ -98,7 +111,9 @@ function App() {
 
   const checkUserSession = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user?.email) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
+    if (session?.user?.email) {
+      setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email);
+    }
   }
 
   const syncProfile = async (userEmail) => {
@@ -114,6 +129,23 @@ function App() {
     const { data, error } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
     if (error) setError("Erreur de chargement."); else setItems(data || [])
     setLoading(false)
+  }
+
+  const handleLinkEmail = async () => {
+    if (!email || isEmailConfirmed) return; setLoading(true)
+    try {
+      // SOLUTION ÉTAPE 1 PHASE 2 : Pas d'update immédiat en base.
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email, 
+        options: { emailRedirectTo: 'com.dressflow.app://login' } 
+      })
+      if (error) throw error
+      alert("Lien magique envoyé ! 🪄 Clique sur le lien dans ton email pour confirmer et sécuriser ton compte.")
+    } catch (err) { 
+      alert("Erreur : " + err.message) 
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleAddItem = async () => {
@@ -151,14 +183,9 @@ function App() {
   }
 
   const handleSelectCity = (city) => {
-    if (cityModalMode === 'home') {
-      initWeather(city.latitude, city.longitude, city.name)
-    } else {
-      setTravelData({ destination: city.name, lat: city.latitude, lon: city.longitude })
-    }
-    setShowCityModal(false)
-    setCitySearch('')
-    setCityResults([])
+    if (cityModalMode === 'home') initWeather(city.latitude, city.longitude, city.name);
+    else setTravelData({ destination: city.name, lat: city.latitude, lon: city.longitude });
+    setShowCityModal(false); setCitySearch(''); setCityResults([])
   }
 
   const handleGenerateSuitcase = async () => {
@@ -226,21 +253,6 @@ function App() {
 
   const findItemById = (id) => items.find(item => item.id === id)
 
-  const filteredAndSortedItems = useMemo(() => {
-    let list = [...items]
-    if (activeFilter !== 'Tous') {
-      list = list.filter(item => {
-        if (activeFilter === 'Mes Hauts') return ['T-shirt', 'Hoodie', 'Sweat', 'Chemise', 'Top', 'Pull'].includes(item.type)
-        if (activeFilter === 'Mes Bas') return ['Jean', 'Pantalon', 'Short', 'Jupe', 'Chino'].includes(item.type)
-        if (activeFilter === 'Extérieur') return ['Veste', 'Manteau', 'Parka', 'Trench'].includes(item.type)
-        return item.type === activeFilter || item.activity === activeFilter
-      })
-    }
-    list.sort((a, b) => a.type.localeCompare(b.type))
-    if (weather) { list.sort((a, b) => getItemWeatherScore(b, weather.temp) - getItemWeatherScore(a, weather.temp)); }
-    return list
-  }, [items, activeFilter, weather])
-
   const getItemWeatherScore = (item, temp) => {
     let score = 0; if (temp < 12) { if (['Manteau', 'Parka', 'Pull'].includes(item.type)) score += 10; if (item.season === 'Hiver') score += 5; }
     else if (temp > 22) { if (['Short', 'T-shirt'].includes(item.type)) score += 10; if (item.season === 'Été') score += 5; }
@@ -275,7 +287,7 @@ function App() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><div style={{ background: 'var(--primary)', color: 'white', padding: '12px', borderRadius: '18px' }}><Sun size={24} /></div><div><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div><div className="subtitle" style={{ fontSize: '0.85rem', marginTop: 0 }}>{weather ? weather.description : 'Récupération...'}</div></div></div>
               </div>
               <div className="filter-bar">{['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'].map(f => (<button key={f} className={`filter-pill ${activeFilter === f ? 'active' : ''}`} onClick={() => setActiveFilter(f)}>{f}</button>))}</div>
-              <div className="item-grid">{filteredAndSortedItems.map(item => (<div key={item.id} className="item-card" onClick={() => setSelectedItem(item)}><div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}{getItemWeatherScore(item, weather?.temp || 20) > 5 && <div className="weather-badge"><Sparkles size={12} /></div>}</div><div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.color} • {item.activity}</div></div></div>))}</div>
+              <div className="item-grid">{items.map(item => (<div key={item.id} className="item-card" onClick={() => setSelectedItem(item)}><div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}{getItemWeatherScore(item, weather?.temp || 20) > 5 && <div className="weather-badge"><Sparkles size={12} /></div>}</div><div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.color} • {item.activity}</div></div></div>))}</div>
             </motion.div>
           )}
 
@@ -283,31 +295,19 @@ function App() {
             <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-                <div onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} className="input-styled" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', color: travelData.destination ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                  <Search size={18} /> {travelData.destination || "Où pars-tu ?"}
-                </div>
-                <button className="btn-primary" onClick={handleGenerateSuitcase} style={{ marginTop: '1rem' }} disabled={suitcaseLoading}>
-                  {suitcaseLoading ? <Loader2 className="animate-spin" /> : "Générer ma valise ✨"}
-                </button>
+                <div onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} className="input-styled" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}><Search size={18} /> {travelData.destination || "Où pars-tu ?"}</div>
+                <button className="btn-primary" onClick={handleGenerateSuitcase} style={{ marginTop: '1rem' }}>Générer ma valise ✨</button>
               </div>
-              
-              <AnimatePresence>
-                {suitcase.length > 0 && (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '0 0.5rem' }}>
-                    <div className="subtitle" style={{ marginBottom: '1rem', fontWeight: 800 }}>Checklist pour {travelData.destination} :</div>
-                    {suitcase.map((item, idx) => (
-                      <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: item.checked ? '5px solid #10b981' : '1px solid var(--glass-border)' }}>
-                        <div style={{ width: '22px', height: '22px', borderRadius: '6px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.checked && <Check size={14} color="white" />}</div>
-                        <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <div style={{ padding: '0 0.5rem' }}>{suitcase.map((item, idx) => (
+                <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ width: '22px', height: '22px', borderRadius: '6px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent' }} />
+                  <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
+                </div>
+              ))}</div>
             </motion.div>
           )}
 
-          {/* OTHERS VIEWS (REMAIN UNCHANGED) */}
+          {/* OTHERS VIEWS */}
           {view === 'outfit-result' && currentOutfit && (
             <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Ton Styliste 🪄</h2><p className="subtitle">{currentOutfit.explanation}</p></header>
@@ -326,16 +326,59 @@ function App() {
             </motion.div>
           )}
 
-          {/* CITY MODAL */}
+          <AnimatePresence>
+            {selectedItem && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => { setSelectedItem(null); setIsEditing(false); }}>
+                <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem', height: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '1.6rem' }}>{isEditing ? 'Modifier' : 'Détails'}</h2><button onClick={() => { setSelectedItem(null); setIsEditing(false); }} style={{ background: 'none', border: 'none' }}><X size={24} /></button></div>
+                  {isEditing ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <select className="input-styled" value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                      <select className="input-styled" value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                      <button className="btn-primary" onClick={handleUpdateItem}><Save size={20} /> Enregistrer</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}><div style={{ width: '150px', height: '150px', margin: '0 auto', background: 'white', borderRadius: '20px', overflow: 'hidden' }}>{selectedItem.image_url ? <img src={selectedItem.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '4rem', lineHeight: '150px' }}>{selectedItem.icon}</div>}</div></div>
+                      <div style={{ marginBottom: '2rem' }}><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{selectedItem.type} {selectedItem.color}</div><div className="subtitle">{selectedItem.activity} • {selectedItem.season}</div></div>
+                      <div style={{ display: 'flex', gap: '1rem' }}><button className="btn-primary" style={{ flex: 2 }} onClick={() => handleUpdateLastWorn(selectedItem)}><Check size={20} /> Je porte ça !</button><button className="btn-secondary" onClick={() => { setIsEditing(true); setEditForm({ type: selectedItem.type, color: selectedItem.color, season: selectedItem.season }); }}><Edit3 size={20} /></button><button className="btn-secondary" style={{ color: '#f43f5e' }} onClick={() => handleDeleteItem(selectedItem.id)}><Trash2 size={20} /></button></div>
+                    </>
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {view === 'settings' && (
+            <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
+              <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
+              <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
+                <div className="profile-avatar">{gender === 'female' ? '👩' : '👨'}</div>
+                <h3 className="title" style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>{name || 'Utilisateur'}</h3>
+                <input type="email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isEmailConfirmed} style={{ marginBottom: '1rem' }} />
+                {!isEmailConfirmed && <button className="btn-primary" onClick={handleLinkEmail} style={{ marginBottom: '1rem' }}>Lier mon email 🪄</button>}
+                <button className="btn-secondary" onClick={async () => { await supabase.auth.signOut(); setIsEmailConfirmed(false); setUid(''); setView('splash'); }} style={{ color: '#f43f5e' }}><LogOut size={20} /> Déconnexion</button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* AUTH FLOWS */}
+          {view === 'splash' && (
+            <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
+              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
+                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
+                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
+              </div>
+            </motion.div>
+          )}
+
           {showCityModal && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="modal-overlay" onClick={() => setShowCityModal(false)}>
               <motion.div className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}>
                 <h2 className="title" style={{ fontSize: '1.6rem', marginBottom: '1.5rem' }}>{cityModalMode === 'home' ? 'Changer de ville' : 'Destination'}</h2>
-                <input type="text" placeholder="Rechercher une ville..." className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} autoFocus />
-                <div style={{ maxHeight: '250px', overflowY: 'auto', marginTop: '1rem' }}>
-                  {cityResults.map(city => (<div key={city.id} onClick={() => handleSelectCity(city)} className="btn-secondary" style={{ marginBottom: '0.5rem', textAlign: 'left', display: 'flex', justifyContent: 'space-between' }}><span>{city.name}</span><span style={{ opacity: 0.5 }}>{city.country}</span></div>))}
-                  {citySearch.length > 2 && cityResults.length === 0 && <div className="subtitle" style={{ textAlign: 'center', padding: '1rem' }}>Aucun résultat...</div>}
-                </div>
+                <input type="text" placeholder="Rechercher une ville..." className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} />
+                <div style={{ maxHeight: '250px', overflowY: 'auto', marginTop: '1rem' }}>{cityResults.map(city => (<div key={city.id} onClick={() => handleSelectCity(city)} className="btn-secondary" style={{ marginBottom: '0.5rem', textAlign: 'left' }}>{city.name} ({city.country})</div>))}</div>
               </motion.div>
             </motion.div>
           )}
