@@ -9,7 +9,7 @@ import {
   Calendar, Trash2, Heart, ShoppingBag, Home, User,
   LifeBuoy, FileText, ShieldAlert, Key, Lock, Search,
   MapPin, Luggage, Plane, ListChecks, ChevronRight,
-  UserCircle, Edit3, Save, Info, MapPinned
+  UserCircle, Edit3, Save, Info, MapPinned, History
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import { App as CapApp } from '@capacitor/app'
@@ -62,14 +62,17 @@ function App() {
   const [suitcaseLoading, setSuitcaseLoading] = useState(false)
   const [currentOutfit, setCurrentOutfit] = useState(null)
   const [outfitLoading, setOutfitLoading] = useState(false)
+  
+  // Forgotten items (ÉTAPE 2 PHASE 3)
   const [forgottenItems, setForgottenItems] = useState([])
+  
   const [selectedItem, setSelectedItem] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState(null)
 
   const fileInputRef = useRef(null)
   const camInputRef = useRef(null)
-  const searchTimeoutRef = useRef(null) // ÉTAPE 1 PHASE 3 : Ref pour le Debounce
+  const searchTimeoutRef = useRef(null)
 
   const ALL_TYPES = ['T-shirt', 'Crop-top', 'Hoodie', 'Sweat', 'Chemise', 'Polo', 'Top', 'Blouse', 'Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino', 'Robe', 'Veste', 'Blazer', 'Manteau', 'Parka', 'Trench', 'Cardigan', 'Pull', 'Maillot de bain', 'Pyjama', 'Basket', 'Bottes', 'Sandales', 'Escarpins', 'Accessoire', 'Sac', 'Casquette', 'Bonnet']
   const ALL_COLORS = ['Blanc', 'Noir', 'Gris', 'Beige', 'Marine', 'Bleu Ciel', 'Kaki', 'Vert Sapin', 'Bordeaux', 'Rouge', 'Rose Poudré', 'Rose', 'Moutarde', 'Jaune', 'Lilas', 'Violet', 'Terracotta', 'Orange', 'Or', 'Argent', 'Marron', 'Camel']
@@ -179,19 +182,12 @@ function App() {
   }
 
   const handleCitySearch = (val) => {
-    setCitySearch(val)
-    
-    // ÉTAPE 1 PHASE 3 : Implémentation du DEBOUNCE
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-    
+    setCitySearch(val); if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
     if (val.length > 2) {
       searchTimeoutRef.current = setTimeout(async () => {
-        const results = await searchCity(val)
-        setCityResults(results)
-      }, 500) // On attend 500ms sans frappe avant d'appeler l'API
-    } else {
-      setCityResults([])
-    }
+        const results = await searchCity(val); setCityResults(results)
+      }, 500)
+    } else setCityResults([])
   }
 
   const handleSelectCity = (city) => {
@@ -202,7 +198,7 @@ function App() {
 
   const handleGenerateSuitcase = async () => {
     if (!travelData.lat) { alert("Destination ?"); return; }
-    setSuitcaseLoading(true)
+    setSuitcaseLoading(true) // ÉTAPE 2 PHASE 3 : Activation de l'état de chargement
     try {
       const destWeather = await getLocalWeather(travelData.lat, travelData.lon)
       const suggestions = items.filter(item => getItemWeatherScore(item, destWeather.temp) > 0).slice(0, 10).map(s => ({ ...s, checked: false }))
@@ -250,7 +246,11 @@ function App() {
   }
 
   const checkForForgottenItems = () => {
-    const forgotten = items.filter(item => (new Date() - new Date(item.last_worn_date || item.created_at)) > (60 * 24 * 60 * 60 * 1000)); setForgottenItems(forgotten)
+    // Calcul des habits oubliés (> 60 jours)
+    const sixtyDaysAgo = new Date()
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const forgotten = items.filter(item => new Date(item.last_worn_date || item.created_at) < sixtyDaysAgo)
+    setForgottenItems(forgotten.slice(0, 5))
   }
 
   const findItemById = (id) => items.find(item => item.id === id)
@@ -299,6 +299,24 @@ function App() {
                 )}
               </div>
 
+              {/* SECTION À REDÉCOUVRIR (ÉTAPE 2 PHASE 3) */}
+              {forgottenItems.length > 0 && (
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
+                    <History size={18} color="var(--primary)" />
+                    <h3 className="title" style={{ fontSize: '1.2rem', margin: 0 }}>À redécouvrir ✨</h3>
+                  </div>
+                  <div className="forgotten-scroll">
+                    {forgottenItems.map(item => (
+                      <div key={item.id} className="forgotten-card" onClick={() => setSelectedItem(item)}>
+                        <div className="forgotten-img">{item.image_url ? <img src={item.image_url} /> : item.icon}</div>
+                        <div className="forgotten-label">{item.type}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="filter-bar">{['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'].map(f => (<button key={f} className={`filter-pill ${activeFilter === f ? 'active' : ''}`} onClick={() => setActiveFilter(f)}>{f}</button>))}</div>
               <div className="item-grid">{items.map(item => (<div key={item.id} className="item-card" onClick={() => setSelectedItem(item)}><div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}{getItemWeatherScore(item, weather?.temp || 20) > 5 && <div className="weather-badge"><Sparkles size={12} /></div>}</div><div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.color} • {item.activity}</div></div></div>))}</div>
             </motion.div>
@@ -309,17 +327,36 @@ function App() {
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
                 <div onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} className="input-styled" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}><Search size={18} /> {travelData.destination || "Où pars-tu ?"}</div>
-                <button className="btn-primary" onClick={handleGenerateSuitcase} style={{ marginTop: '1rem' }}>Générer ma valise ✨</button>
+                
+                {/* ÉTAPE 2 PHASE 3 : Spinner sur le bouton valise */}
+                <button className="btn-primary" onClick={handleGenerateSuitcase} style={{ marginTop: '1rem' }} disabled={suitcaseLoading}>
+                  {suitcaseLoading ? <Loader2 className="animate-spin" /> : "Générer ma valise ✨"}
+                </button>
               </div>
-              <div style={{ padding: '0 0.5rem' }}>{suitcase.map((item, idx) => (
-                <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ width: '22px', height: '22px', borderRadius: '6px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent' }} />
-                  <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
+
+              {suitcaseLoading && (
+                <div style={{ textAlign: 'center', padding: '3rem' }}>
+                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧳</motion.div>
+                  <div className="subtitle">Préparation de tes essentiels...</div>
                 </div>
-              ))}</div>
+              )}
+
+              <AnimatePresence>
+                {!suitcaseLoading && suitcase.length > 0 && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <div style={{ padding: '0 0.5rem' }}>{suitcase.map((item, idx) => (
+                      <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ width: '22px', height: '22px', borderRadius: '6px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.checked && <Check size={14} color="white" />}</div>
+                        <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
+                      </div>
+                    ))}</div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
+          {/* OTHERS VIEWS REMAIN UNCHANGED */}
           {view === 'outfit-result' && currentOutfit && (
             <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Ton Styliste 🪄</h2><p className="subtitle">{currentOutfit.explanation}</p></header>
@@ -337,6 +374,29 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}><button className="btn-primary" onClick={handleValidateOutfit}><Check size={20} /> Je porte cette tenue !</button><button className="btn-secondary" onClick={handleGenerateOutfitRequest}><RefreshCw size={20} /> Autre proposition</button></div>
             </motion.div>
           )}
+
+          <AnimatePresence>
+            {selectedItem && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => { setSelectedItem(null); setIsEditing(false); }}>
+                <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem', height: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '1.6rem' }}>{isEditing ? 'Modifier' : 'Détails'}</h2><button onClick={() => { setSelectedItem(null); setIsEditing(false); }} style={{ background: 'none', border: 'none' }}><X size={24} /></button></div>
+                  {isEditing ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <select className="input-styled" value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                      <select className="input-styled" value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                      <button className="btn-primary" onClick={handleUpdateItem}><Save size={20} /> Enregistrer</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}><div style={{ width: '150px', height: '150px', margin: '0 auto', background: 'white', borderRadius: '20px', overflow: 'hidden' }}>{selectedItem.image_url ? <img src={selectedItem.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '4rem', lineHeight: '150px' }}>{selectedItem.icon}</div>}</div></div>
+                      <div style={{ marginBottom: '2rem' }}><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{selectedItem.type} {selectedItem.color}</div><div className="subtitle">{selectedItem.activity} • {selectedItem.season}</div></div>
+                      <div style={{ display: 'flex', gap: '1rem' }}><button className="btn-primary" style={{ flex: 2 }} onClick={() => handleUpdateLastWorn(selectedItem)}><Check size={20} /> Je porte ça !</button><button className="btn-secondary" onClick={() => { setIsEditing(true); setEditForm({ type: selectedItem.type, color: selectedItem.color, season: selectedItem.season }); }}><Edit3 size={20} /></button><button className="btn-secondary" style={{ color: '#f43f5e' }} onClick={() => handleDeleteItem(selectedItem.id)}><Trash2 size={20} /></button></div>
+                    </>
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {view === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
