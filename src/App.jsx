@@ -155,6 +155,22 @@ function App() {
     setLoading(false)
   }
 
+  const handleLinkEmail = async () => {
+    if (!email) return;
+    setLoading(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ email })
+      .eq('id', uid)
+    
+    if (error) {
+      alert("Erreur lors de la sauvegarde.")
+    } else {
+      alert("Compte sécurisé ! ✨")
+    }
+    setLoading(false)
+  }
+
   const handleRegister = async () => {
     setLoading(true)
     setError(null)
@@ -352,19 +368,19 @@ function App() {
           {/* DASHBOARD VIEW */}
           {view === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
-              <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h1 className="title" style={{ fontSize: '2.2rem' }}>Dressflow</h1>
+              <header style={{ marginBottom: '1rem' }}>
+                <h1 className="title" style={{ fontSize: '2.4rem' }}>Dressflow</h1>
               </header>
 
               {/* Weather & Info */}
-              <div className="glass-card" style={{ padding: '1.2rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="glass-card" style={{ padding: '1rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <div style={{ background: 'var(--primary)', color: 'white', padding: '10px', borderRadius: '15px' }}>
                     <Sun size={24} />
                   </div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div>
-                    <div className="subtitle" style={{ fontSize: '0.8rem' }}>{weather ? weather.description : 'Météo...'}</div>
+                    <div className="subtitle" style={{ fontSize: '0.8rem', marginTop: 0 }}>{weather ? weather.description : 'Météo...'}</div>
                   </div>
                 </div>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, opacity: 0.6 }}>{items.length} habits</div>
@@ -372,20 +388,19 @@ function App() {
 
               {/* ALERTS SECTION */}
               {forgottenItems.length > 0 && (
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={() => setShowAlertModal(true)} className="glass-card" style={{ padding: '1rem', marginBottom: '1.5rem', background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ background: '#fbbf24', color: 'white', padding: '8px', borderRadius: '10px' }}><AlertCircle size={20} /></div>
+                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={() => setShowAlertModal(true)} className="glass-card" style={{ padding: '0.8rem', marginBottom: '1rem', background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ background: '#fbbf24', color: 'white', padding: '8px', borderRadius: '10px' }}><AlertCircle size={18} /></div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#92400e' }}>{forgottenItems.length} vêtements oubliés</div>
-                    <div style={{ fontSize: '0.75rem', color: '#92400e' }}>Clique pour trier ton dressing !</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#92400e' }}>{forgottenItems.length} vêtements oubliés</div>
                   </div>
                 </motion.div>
               )}
 
-              {loading ? <div style={{ textAlign: 'center', padding: '4rem' }}><Loader2 className="animate-spin" size={40} /></div> : items.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-                  <div style={{ fontSize: '4rem' }}>🧥</div>
-                  <h3 className="title" style={{ fontSize: '1.4rem' }}>Dressing vide</h3>
-                  <p className="subtitle">Ajoute ton premier vêtement !</p>
+              {loading ? <div style={{ textAlign: 'center', padding: '2rem' }}><Loader2 className="animate-spin" size={30} /></div> : items.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧥</div>
+                  <h3 className="title" style={{ fontSize: '1.2rem' }}>Dressing vide</h3>
+                  <p className="subtitle" style={{ fontSize: '0.9rem' }}>Ajoute ton premier vêtement !</p>
                 </div>
               ) : (
                 <div className="item-grid">
