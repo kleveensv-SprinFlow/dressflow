@@ -12,6 +12,7 @@ import {
   UserCircle, Edit3, Save, Info
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
+import { App as CapApp } from '@capacitor/app' // ÉTAPE 4 PHASE 2 : Plugin pour Deep Linking
 
 // Styles & DB & Services
 import './styles/index.css'
@@ -73,12 +74,23 @@ function App() {
 
   const [newItem, setNewItem] = useState({ type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
-  const [tempFile, setTempFile] = useState(null) // ÉTAPE 3 PHASE 2 : Fichier temporaire local
+  const [tempFile, setTempFile] = useState(null)
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
   
   useEffect(() => { 
     checkUserSession()
+    
+    // ÉTAPE 4 PHASE 2 : Écouteur de Deep Link pour Android
+    CapApp.addListener('appUrlOpen', data => {
+      const url = new URL(data.url.replace('#', '?')) // Convertir le fragment # en params pour URLSearchParams
+      const accessToken = url.searchParams.get('access_token')
+      const refreshToken = url.searchParams.get('refresh_token')
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+      }
+    })
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const userEmail = session.user.email
@@ -136,7 +148,7 @@ function App() {
     try {
       const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
       if (error) throw error
-      alert("Lien magique envoyé ! ✨")
+      alert("Lien magique envoyé ! ✨ Vérifie tes emails.")
     } catch (err) { alert(err.message) }
     finally { setLoading(false) }
   }
@@ -144,22 +156,12 @@ function App() {
   const handleAddItem = async () => {
     if (!uid || !tempFile) return; setLoading(true)
     try {
-      // SOLUTION ÉTAPE 3 PHASE 2 : On n'upload qu'au moment de confirmer
       const fileName = `${uid}-${Date.now()}.jpg`
-      const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, tempFile)
-      if (uploadError) throw uploadError
-
+      await supabase.storage.from('clothes-images').upload(fileName, tempFile)
       const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
-
-      await supabase.from('clothes').insert([{ 
-        profile_id: uid, 
-        ...newItem, 
-        image_url: publicUrl, 
-        last_worn_date: new Date().toISOString() 
-      }])
-      
+      await supabase.from('clothes').insert([{ profile_id: uid, ...newItem, image_url: publicUrl, last_worn_date: new Date().toISOString() }])
       await fetchItems(uid); setView('dashboard'); setSelectedImage(null); setTempFile(null)
-    } catch (err) { alert("Erreur lors de l'ajout : " + err.message) }
+    } catch (err) { alert(err.message) }
     finally { setLoading(false) }
   }
 
@@ -230,7 +232,6 @@ function App() {
     if (file) {
       setView('loading-ai'); setLoading(true)
       try {
-        // SOLUTION ÉTAPE 3 PHASE 2 : Analyse locale et prévisualisation locale
         const aiTags = await analyzeClothing(file)
         setNewItem({ ...newItem, ...aiTags, icon: getIconForType(aiTags.type) })
         setTempFile(file)
@@ -356,6 +357,16 @@ function App() {
                 </div>
                 <button onClick={handleAddItem} className="btn-primary" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Confirmer ✨"}</button>
               </div>
+            </motion.div>
+          )}
+
+          {showCityModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="modal-overlay" onClick={() => setShowCityModal(false)}>
+              <motion.div className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}>
+                <h2 className="title" style={{ fontSize: '1.6rem', marginBottom: '1.5rem' }}>{cityModalMode === 'home' ? 'Changer de ville' : 'Destination'}</h2>
+                <input type="text" placeholder="Rechercher une ville..." className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} />
+                <div style={{ maxHeight: '250px', overflowY: 'auto', marginTop: '1rem' }}>{cityResults.map(city => (<div key={city.id} onClick={() => handleSelectCity(city)} className="btn-secondary" style={{ marginBottom: '0.5rem', textAlign: 'left' }}>{city.name} ({city.country})</div>))}</div>
+              </motion.div>
             </motion.div>
           )}
 
