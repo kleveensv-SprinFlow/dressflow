@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dressflow</string>
+    <string name="title_activity_main">Dressflow</string>
+    <string name="package_name">com.dressflow.app</string>
+    <string name="custom_url_scheme">com.dressflow.app</string>
+</resources>

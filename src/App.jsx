@@ -6,7 +6,7 @@ import {
   Tag, Palette, Sun, Briefcase, X, ArrowRight, Loader2,
   Settings, Mail, ShieldCheck, LogOut, AlertCircle,
   Thermometer, CloudRain, Wind, Wand2, RefreshCw,
-  Calendar, Trash2, Heart, ShoppingBag
+  Calendar, Trash2, Heart, ShoppingBag, Home, User
 } from 'lucide-react'
 
 // Styles & DB & Services
@@ -39,6 +39,16 @@ function App() {
   const [forgottenItems, setForgottenItems] = useState([])
   const [showAlertModal, setShowAlertModal] = useState(false)
 
+  // Loading Phrases
+  const [loadingPhrase, setLoadingPhrase] = useState("Analyse de ton dressing...")
+  const phrases = [
+    "Analyse de ton dressing...",
+    "Vérification de la météo locale...",
+    "Création de la tenue parfaite...",
+    "Coordination des couleurs...",
+    "Presque prêt ! ✨"
+  ]
+
   // Image handling
   const [selectedImage, setSelectedImage] = useState(null)
   const fileInputRef = useRef(null)
@@ -58,11 +68,23 @@ function App() {
   }, [gender])
 
   useEffect(() => {
-    if (view === 'dashboard') {
+    if (view === 'dashboard' || view === 'outfit-result' || view === 'settings') {
       if (!weather) initWeather()
       checkForForgottenItems()
     }
   }, [view, items])
+
+  useEffect(() => {
+    let interval;
+    if (view === 'loading-ai' || view === 'loading-outfit') {
+      let i = 0;
+      interval = setInterval(() => {
+        i = (i + 1) % phrases.length;
+        setLoadingPhrase(phrases[i]);
+      }, 1500);
+    }
+    return () => clearInterval(interval);
+  }, [view])
 
   const initWeather = async () => {
     const data = await getLocalWeather()
@@ -82,19 +104,15 @@ function App() {
   const checkForForgottenItems = () => {
     const currentSeason = getCurrentSeason()
     const now = new Date()
-    const thresholdDays = 60 // 2 mois
+    const thresholdDays = 60 
 
     const forgotten = items.filter(item => {
-      // On ne check que les vêtements de saison ou "Toutes saisons"
       if (item.season !== currentSeason && item.season !== 'Toutes saisons') return false
-      
       const lastWorn = new Date(item.last_worn_date || item.created_at)
       const diffTime = Math.abs(now - lastWorn)
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      
       return diffDays > thresholdDays
     })
-
     setForgottenItems(forgotten)
   }
 
@@ -222,8 +240,8 @@ function App() {
   }
 
   const handleGenerateOutfitRequest = async () => {
-    if (items.length < 2) {
-      alert("Ajoute au moins 2 ou 3 vêtements pour que l'IA puisse créer une tenue !")
+    if (items.length < 3) {
+      alert("Ajoute au moins 3 ou 4 vêtements pour que l'IA puisse créer une tenue complète !")
       return
     }
     setOutfitLoading(true)
@@ -291,6 +309,36 @@ function App() {
 
   const findItemById = (id) => items.find(i => i.id === id)
 
+  // --- SUB-COMPONENTS ---
+
+  const BottomNav = () => (
+    <div className="bottom-nav">
+      <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
+        <Home size={24} />
+        <span>Dressing</span>
+      </div>
+      <div className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => {
+        if (currentOutfit) setView('outfit-result')
+        else handleGenerateOutfitRequest()
+      }}>
+        <Wand2 size={24} />
+        <span>Styliste</span>
+      </div>
+      <div className="nav-item" onClick={() => setView('add-choice')}>
+        <div className="add-nav-btn">
+          <Plus size={32} />
+        </div>
+        <span>Ajouter</span>
+      </div>
+      <div className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}>
+        <User size={24} />
+        <span>Profil</span>
+      </div>
+    </div>
+  )
+
+  const isMainView = ['dashboard', 'outfit-result', 'settings'].includes(view)
+
   return (
     <div id="root">
       <div className="bg-blobs">
@@ -306,12 +354,9 @@ function App() {
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h1 className="title" style={{ fontSize: '2.2rem' }}>Dressflow</h1>
-                <div onClick={() => setView('settings')} style={{ cursor: 'pointer', padding: '10px' }}>
-                  <Settings size={28} color="var(--text-main)" />
-                </div>
               </header>
 
-              {/* Weather & Magic Button */}
+              {/* Weather & Info */}
               <div className="glass-card" style={{ padding: '1.2rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <div style={{ background: 'var(--primary)', color: 'white', padding: '10px', borderRadius: '15px' }}>
@@ -322,9 +367,7 @@ function App() {
                     <div className="subtitle" style={{ fontSize: '0.8rem' }}>{weather ? weather.description : 'Météo...'}</div>
                   </div>
                 </div>
-                <button onClick={handleGenerateOutfitRequest} className="btn-primary" style={{ width: 'auto', padding: '10px 15px', borderRadius: '15px', fontSize: '0.9rem', display: 'flex', gap: '8px' }}>
-                  <Wand2 size={18} /> Look du jour
-                </button>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, opacity: 0.6 }}>{items.length} habits</div>
               </div>
 
               {/* ALERTS SECTION */}
@@ -333,9 +376,8 @@ function App() {
                   <div style={{ background: '#fbbf24', color: 'white', padding: '8px', borderRadius: '10px' }}><AlertCircle size={20} /></div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#92400e' }}>{forgottenItems.length} vêtements oubliés</div>
-                    <div style={{ fontSize: '0.75rem', color: '#92400e' }}>Tu ne les as pas portés depuis longtemps !</div>
+                    <div style={{ fontSize: '0.75rem', color: '#92400e' }}>Clique pour trier ton dressing !</div>
                   </div>
-                  <ChevronLeft size={20} style={{ transform: 'rotate(180deg)', color: '#92400e' }} />
                 </motion.div>
               )}
 
@@ -343,14 +385,14 @@ function App() {
                 <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
                   <div style={{ fontSize: '4rem' }}>🧥</div>
                   <h3 className="title" style={{ fontSize: '1.4rem' }}>Dressing vide</h3>
-                  <button onClick={() => setView('add-choice')} className="btn-primary" style={{ marginTop: '2rem' }}>Ajouter un habit</button>
+                  <p className="subtitle">Ajoute ton premier vêtement !</p>
                 </div>
               ) : (
                 <div className="item-grid">
                   {items.map(item => (
-                    <div key={item.id} className="item-card">
-                      <div className="item-image" onClick={() => handleUpdateLastWorn(item.id)}>
-                        {item.image_url ? <img src={item.image_url} alt={item.type} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'var(--radius-md)' }} /> : item.icon || '👕'}
+                    <div key={item.id} className="item-card" onClick={() => handleUpdateLastWorn(item.id)}>
+                      <div className="item-image">
+                        {item.image_url ? <img src={item.image_url} alt={item.type} /> : <span>{item.icon || '👕'}</span>}
                         <div className="worn-badge"><Calendar size={12} /></div>
                       </div>
                       <div className="item-info">
@@ -361,14 +403,12 @@ function App() {
                   ))}
                 </div>
               )}
-              <button className="fab" onClick={() => setView('add-choice')}><Plus size={35} /></button>
             </motion.div>
           )}
 
           {/* OUTFIT RESULT VIEW */}
           {view === 'outfit-result' && currentOutfit && (
             <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%', paddingBottom: '3rem' }}>
-              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none', marginBottom: '1.5rem' }}><ChevronLeft size={20} /> Retour</button>
               <h2 className="title" style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>Tenue suggérée 🪄</h2>
               <p className="subtitle" style={{ marginBottom: '2rem' }}>{currentOutfit.explanation}</p>
               
@@ -401,8 +441,37 @@ function App() {
             </motion.div>
           )}
 
-          {/* SPLASH, LOGIN, REGISTER, SUCCESS, SETTINGS, LOADING, ADD FLOWS */}
-          {/* ... (Maintained from previous steps) ... */}
+          {/* SETTINGS VIEW */}
+          {view === 'settings' && (
+            <motion.div key="settings" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="dashboard-container">
+              <h2 className="title" style={{ fontSize: '2rem', marginBottom: '2rem' }}>Mon Profil</h2>
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.4)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                  <Mail size={24} color="var(--primary)" />
+                  <h3 style={{ fontSize: '1.1rem' }}>Lier mon compte</h3>
+                </div>
+                <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.5rem' }}>Sauvegarder</button>
+              </div>
+              <div className="glass-card" style={{ padding: '1.5rem', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
+                <button onClick={() => setView('splash')} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '1rem', width: '100%' }}>
+                  <LogOut size={24} /> Déconnexion
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* LOADING VIEWS */}
+          {(view === 'loading-ai' || view === 'loading-outfit') && (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>
+                {view === 'loading-ai' ? '🧠' : '🪄'}
+              </motion.div>
+              <h2 className="title" style={{ fontSize: '1.8rem' }}>{loadingPhrase}</h2>
+            </motion.div>
+          )}
+
+          {/* SPLASH, LOGIN, REGISTER, SUCCESS */}
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="logo-container">
@@ -450,25 +519,8 @@ function App() {
               <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ marginTop: '2.5rem' }}>Accéder à mon dressing</button>
             </motion.div>
           )}
-          {view === 'settings' && (
-            <motion.div key="settings" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="glass-card my-auto">
-              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
-              <h2 className="title" style={{ fontSize: '2rem', marginBottom: '2rem' }}>Paramètres</h2>
-              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.4)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                  <Mail size={24} color="var(--primary)" />
-                  <h3 style={{ fontSize: '1.1rem' }}>Sécuriser mon compte</h3>
-                </div>
-                <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
-                <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.5rem' }}>Lier mon email</button>
-              </div>
-              <div className="glass-card" style={{ padding: '1.5rem', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
-                <button onClick={() => setView('splash')} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '1rem', width: '100%' }}>
-                  <LogOut size={24} /> Déconnexion
-                </button>
-              </div>
-            </motion.div>
-          )}
+
+          {/* ADD FLOW VIEWS */}
           {view === 'add-choice' && (
             <motion.div key="add-choice" initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderRadius: '40px 40px 0 0', padding: '2rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -483,14 +535,15 @@ function App() {
               </div>
             </motion.div>
           )}
+
           {view === 'add-detail' && (
             <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container" style={{ width: '100%', paddingBottom: '3rem' }}>
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
                 {selectedImage ? <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: 'var(--radius-md)', maxHeight: '200px', objectFit: 'contain' }} /> : <div style={{ fontSize: '6rem' }}>👗</div>}
-                <p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>L'IA a détecté ces tags ✨</p>
+                <p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Vérification des infos ✨</p>
               </div>
               <div className="glass-card" style={{ gap: '1.2rem', display: 'flex', flexDirection: 'column' }}>
-                <h2 className="title" style={{ fontSize: '1.6rem' }}>Vérification</h2>
+                <h2 className="title" style={{ fontSize: '1.6rem' }}>Détails</h2>
                 <div>
                   <label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Type</label>
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{['Haut', 'Bas', 'Robe', 'Veste', 'Chaussures', 'Accessoire'].map(t => (<span key={t} className={`tag-pill ${newItem.type === t ? 'active' : ''}`} onClick={() => setNewItem({...newItem, type: t})}>{t}</span>))}</div>
@@ -511,20 +564,6 @@ function App() {
               </div>
             </motion.div>
           )}
-          {view === 'loading-ai' && (
-            <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
-              <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 2 }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>🧠</motion.div>
-              <h2 className="title" style={{ fontSize: '1.8rem' }}>Analyse par l'IA...</h2>
-              <p className="subtitle" style={{ margin: 'auto' }}>Gemini examine votre vêtement.</p>
-            </motion.div>
-          )}
-          {view === 'loading-outfit' && (
-            <motion.div key="loading-outfit" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
-              <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>🪄</motion.div>
-              <h2 className="title" style={{ fontSize: '1.8rem' }}>Création du look...</h2>
-              <p className="subtitle" style={{ margin: 'auto' }}>Votre styliste personnel prépare une tenue parfaite.</p>
-            </motion.div>
-          )}
 
         </AnimatePresence>
 
@@ -537,29 +576,27 @@ function App() {
                   <h2 className="title" style={{ fontSize: '1.5rem' }}>Oubliés du dressing</h2>
                   <button onClick={() => setShowAlertModal(false)} style={{ background: 'none', border: 'none' }}><X size={24} /></button>
                 </div>
-                <p className="subtitle" style={{ marginBottom: '2rem' }}>Tu n'as pas porté ces pièces de saison depuis plus de 60 jours. Que veux-tu en faire ?</p>
-                
+                <p className="subtitle" style={{ marginBottom: '2rem' }}>Pièces de saison non portées depuis +60 jours.</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {forgottenItems.map(item => (
                     <div key={item.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255,255,255,0.4)' }}>
-                      <div style={{ width: '50px', height: '50px', borderRadius: '10px', overflow: 'hidden' }}>
-                        {item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span>{item.icon}</span>}
-                      </div>
+                      <div style={{ width: '50px', height: '50px', borderRadius: '10px', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span>{item.icon}</span>}</div>
                       <div style={{ flex: 1, fontSize: '0.9rem', fontWeight: 700 }}>{item.type} ({item.color})</div>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => setShowAlertModal(false)} className="action-btn-small" title="Garder"><Heart size={16} /></button>
-                        <button onClick={() => console.log('Vendre')} className="action-btn-small" title="Vendre"><ShoppingBag size={16} /></button>
-                        <button onClick={() => console.log('Donner')} className="action-btn-small" title="Donner"><Trash2 size={16} /></button>
+                        <button onClick={() => setShowAlertModal(false)} className="action-btn-small"><Heart size={16} /></button>
+                        <button onClick={() => console.log('Vendre')} className="action-btn-small"><ShoppingBag size={16} /></button>
+                        <button onClick={() => console.log('Donner')} className="action-btn-small"><Trash2 size={16} /></button>
                       </div>
                     </div>
                   ))}
                 </div>
-
                 <button onClick={() => setShowAlertModal(false)} className="btn-primary" style={{ marginTop: '2rem' }}>Fermer</button>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {isMainView && <BottomNav />}
       </div>
     </div>
   )
