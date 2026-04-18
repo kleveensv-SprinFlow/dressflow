@@ -7,7 +7,7 @@ import {
   Settings, Mail, ShieldCheck, LogOut, AlertCircle,
   Thermometer, CloudRain, Wind, Wand2, RefreshCw,
   Calendar, Trash2, Heart, ShoppingBag, Home, User,
-  LifeBuoy, FileText, ShieldAlert, Key
+  LifeBuoy, FileText, ShieldAlert, Key, Lock
 } from 'lucide-react'
 
 // Styles & DB & Services
@@ -52,6 +52,7 @@ function App() {
   const [gender, setGender] = useState('female')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [uid, setUid] = useState('')
   const [inputCode, setInputCode] = useState('')
   const [copied, setCopied] = useState(false)
@@ -97,8 +98,18 @@ function App() {
   }, [gender])
 
   useEffect(() => {
-    // Check if user is already logged in via Supabase Auth
     checkUserSession()
+    
+    // Listen for auth events (magic link click, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setView('reset-password')
+      } else if (session?.user) {
+        syncProfile(session.user.email)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -123,21 +134,24 @@ function App() {
   const checkUserSession = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.user?.email) {
-      // Find profile by email
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', session.user.email)
-        .single()
-      
-      if (profile) {
-        setUid(profile.id)
-        setName(profile.name)
-        setGender(profile.gender)
-        setEmail(profile.email)
-        await fetchItems(profile.id)
-        setView('dashboard')
-      }
+      await syncProfile(session.user.email)
+    }
+  }
+
+  const syncProfile = async (userEmail) => {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', userEmail)
+      .single()
+    
+    if (profile) {
+      setUid(profile.id)
+      setName(profile.name)
+      setGender(profile.gender)
+      setEmail(profile.email)
+      await fetchItems(profile.id)
+      setView('dashboard')
     }
   }
 
@@ -214,14 +228,12 @@ function App() {
     if (!email) return;
     setLoading(true)
     try {
-      // 1. Envoyer Magic Link pour authentifier l'email
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: window.location.origin }
+        options: { emailRedirectTo: 'com.dressflow.app://login' }
       })
       if (authError) throw authError
 
-      // 2. Mettre à jour le profil avec l'email (pour liaison future)
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ email })
@@ -236,20 +248,39 @@ function App() {
     }
   }
 
-  const handleDeleteAccount = async () => {
-    if (!window.confirm("Es-tu sûr(e) de vouloir supprimer définitivement ton compte et tous tes vêtements ? Cette action est irréversible.")) return
+  const handleResetPasswordRequest = async () => {
+    if (!email) { alert("Saisis ton email d'abord !"); return; }
+    setLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'com.dressflow.app://reset-password'
+    })
+    if (error) alert("Erreur : " + error.message)
+    else alert("E-mail de réinitialisation envoyé ! ✨")
+    setLoading(false)
+  }
 
+  const handleUpdatePassword = async () => {
+    if (password.length < 6) { alert("Le mot de passe doit faire au moins 6 caractères."); return; }
+    setLoading(true)
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) {
+      alert("Erreur : " + error.message)
+    } else {
+      alert("Mot de passe mis à jour ! ✅")
+      setView('dashboard')
+    }
+    setLoading(false)
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Es-tu sûr(e) de vouloir supprimer ton compte ?")) return
     setLoading(true)
     try {
       await supabase.from('clothes').delete().eq('profile_id', uid)
       await supabase.from('profiles').delete().eq('id', uid)
       await supabase.auth.signOut()
-      
       alert("Ton compte a été supprimé. 👋")
       setView('splash')
-      setUid('')
-      setName('')
-      setItems([])
     } catch (err) {
       alert("Erreur lors de la suppression.")
     } finally {
@@ -278,8 +309,6 @@ function App() {
     setLoading(true)
     setError(null)
     const cleanCode = inputCode.replace(/[^A-Z0-9]/g, '')
-    
-    // Check if this code is already secured by email
     const { data: profile, error: profError } = await supabase
       .from('profiles')
       .select('*')
@@ -293,7 +322,7 @@ function App() {
     }
 
     if (profile.email) {
-      setError("Ce compte est sécurisé par email. Connecte-toi via ton adresse email.")
+      setError("Compte sécurisé par email. Connecte-toi via ton adresse email.")
       setLoading(false)
       return
     }
@@ -312,37 +341,30 @@ function App() {
     setLoading(true)
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin }
+      options: { emailRedirectTo: 'com.dressflow.app://login' }
     })
-    if (error) {
-      alert("Erreur : " + error.message)
-    } else {
-      alert("Un lien de connexion a été envoyé par email ! ✨")
-    }
+    if (error) alert("Erreur : " + error.message)
+    else alert("Un lien de connexion a été envoyé par email ! ✨")
     setLoading(false)
+  }
+
+  const getIconForType = (type) => {
+    const icons = { 'Haut': '👕', 'Bas': '👖', 'Robe': '👗', 'Veste': '🧥', 'Chaussures': '👟', 'Accessoire': '👜' }
+    return icons[type] || '✨'
   }
 
   const uploadImageToStorage = async (file) => {
     const fileName = `${uid}-${Date.now()}.jpg`
-    const { data, error } = await supabase.storage
-      .from('clothes-images')
-      .upload(fileName, file)
-
+    const { data, error } = await supabase.storage.from('clothes-images').upload(fileName, file)
     if (error) throw error
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('clothes-images')
-      .getPublicUrl(fileName)
-
+    const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
     return publicUrl
   }
 
   const handleAddItem = async () => {
     setLoading(true)
     try {
-      const { error: addError } = await supabase
-        .from('clothes')
-        .insert([{
+      const { error: addError } = await supabase.from('clothes').insert([{
           profile_id: uid,
           type: newItem.type,
           color: newItem.color,
@@ -351,26 +373,17 @@ function App() {
           icon: getIconForType(newItem.type),
           image_url: selectedImage,
           last_worn_date: new Date().toISOString()
-        }])
-      
+      }])
       if (addError) throw addError
-
       await fetchItems(uid)
       setSelectedImage(null)
       setView('dashboard')
-    } catch (err) {
-      console.error(err)
-      alert("Erreur lors de l'ajout : " + err.message)
-    } finally {
-      setLoading(false)
-    }
+    } catch (err) { alert("Erreur : " + err.message) }
+    finally { setLoading(false) }
   }
 
   const handleGenerateOutfitRequest = async () => {
-    if (items.length < 3) {
-      alert("Ajoute au moins 3 ou 4 vêtements pour que l'IA puisse créer une tenue complète !")
-      return
-    }
+    if (items.length < 3) { alert("Ajoute plus de vêtements !"); return; }
     setOutfitLoading(true)
     setView('loading-outfit')
     try {
@@ -378,17 +391,8 @@ function App() {
       const result = await generateOutfit(items, weatherData)
       setCurrentOutfit(result)
       setView('outfit-result')
-    } catch (err) {
-      alert("L'IA n'a pas pu générer de tenue. Réessaie !")
-      setView('dashboard')
-    } finally {
-      setOutfitLoading(false)
-    }
-  }
-
-  const getIconForType = (type) => {
-    const icons = { 'Haut': '👕', 'Bas': '👖', 'Robe': '👗', 'Veste': '🧥', 'Chaussures': '👟', 'Accessoire': '👜' }
-    return icons[type] || '✨'
+    } catch (err) { alert("Erreur IA"); setView('dashboard') }
+    finally { setOutfitLoading(false) }
   }
 
   const handleFileChange = async (e) => {
@@ -397,29 +401,18 @@ function App() {
       setView('loading-ai')
       setLoading(true)
       try {
-        const [publicUrl, aiTags] = await Promise.all([
-          uploadImageToStorage(file),
-          analyzeClothing(file)
-        ])
+        const [publicUrl, aiTags] = await Promise.all([uploadImageToStorage(file), analyzeClothing(file)])
         setSelectedImage(publicUrl)
         setNewItem({ ...newItem, ...aiTags, icon: getIconForType(aiTags.type) })
         setView('add-detail')
-      } catch (err) {
-        setView('add-detail')
-      } finally {
-        setLoading(false)
-      }
+      } catch (err) { setView('add-detail') }
+      finally { setLoading(false) }
     }
   }
 
   const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Mon Code Dressflow', text: `Voici mon code d'accès : ${uid}` })
-      } catch (err) { console.log(err) }
-    } else {
-      navigator.clipboard.writeText(uid); setCopied(true); setTimeout(() => setCopied(false), 2000)
-    }
+    if (navigator.share) await navigator.share({ title: 'Mon Code Dressflow', text: `Voici mon code : ${uid}` })
+    else { navigator.clipboard.writeText(uid); setCopied(true); setTimeout(() => setCopied(false), 2000) }
   }
 
   const generateRandomUID = () => {
@@ -440,27 +433,10 @@ function App() {
 
   const BottomNav = () => (
     <div className="bottom-nav">
-      <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
-        <Home size={24} />
-        <span>Dressing</span>
-      </div>
-      <div className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => {
-        if (currentOutfit) setView('outfit-result')
-        else handleGenerateOutfitRequest()
-      }}>
-        <Wand2 size={24} />
-        <span>Styliste</span>
-      </div>
-      <div className="nav-item" onClick={() => setView('add-choice')}>
-        <div className="add-nav-btn">
-          <Plus size={32} />
-        </div>
-        <span>Ajouter</span>
-      </div>
-      <div className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}>
-        <User size={24} />
-        <span>Profil</span>
-      </div>
+      <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}><Home size={24} /><span>Dressing</span></div>
+      <div className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => { if (currentOutfit) setView('outfit-result'); else handleGenerateOutfitRequest(); }}><Wand2 size={24} /><span>Styliste</span></div>
+      <div className="nav-item" onClick={() => setView('add-choice')}><div className="add-nav-btn"><Plus size={32} /></div><span>Ajouter</span></div>
+      <div className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}><User size={24} /><span>Profil</span></div>
     </div>
   )
 
@@ -468,159 +444,102 @@ function App() {
 
   return (
     <div id="root">
-      <div className="bg-blobs">
-        <div className="blob blob-1"></div>
-        <div className="blob blob-2"></div>
-      </div>
-
+      <div className="bg-blobs"><div className="blob blob-1"></div><div className="blob blob-2"></div></div>
       <div className="app-container">
         <AnimatePresence mode="wait">
           
-          {/* DASHBOARD VIEW */}
+          {/* DASHBOARD */}
           {view === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
-              <header style={{ marginBottom: '1rem' }}>
-                <h1 className="title" style={{ fontSize: '2.4rem' }}>Dressflow</h1>
-              </header>
-
-              {/* Weather & Info */}
+              <header style={{ marginBottom: '1rem' }}><h1 className="title" style={{ fontSize: '2.4rem' }}>Dressflow</h1></header>
               <div className="glass-card" style={{ padding: '1rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ background: 'var(--primary)', color: 'white', padding: '10px', borderRadius: '15px' }}>
-                    <Sun size={24} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div>
-                    <div className="subtitle" style={{ fontSize: '0.8rem', marginTop: 0 }}>{weather ? weather.description : 'Météo...'}</div>
-                  </div>
+                  <div style={{ background: 'var(--primary)', color: 'white', padding: '10px', borderRadius: '15px' }}><Sun size={24} /></div>
+                  <div><div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div><div className="subtitle" style={{ fontSize: '0.8rem', marginTop: 0 }}>{weather ? weather.description : 'Météo...'}</div></div>
                 </div>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, opacity: 0.6 }}>{items.length} habits</div>
               </div>
-
-              {/* ALERTS SECTION */}
               {forgottenItems.length > 0 && (
                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={() => setShowAlertModal(true)} className="glass-card" style={{ padding: '0.8rem', marginBottom: '1rem', background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <div style={{ background: '#fbbf24', color: 'white', padding: '8px', borderRadius: '10px' }}><AlertCircle size={18} /></div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#92400e' }}>{forgottenItems.length} vêtements oubliés</div>
-                  </div>
+                  <div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#92400e' }}>{forgottenItems.length} vêtements oubliés</div></div>
                 </motion.div>
               )}
-
               {loading ? <div style={{ textAlign: 'center', padding: '2rem' }}><Loader2 className="animate-spin" size={30} /></div> : items.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧥</div>
-                  <h3 className="title" style={{ fontSize: '1.2rem' }}>Dressing vide</h3>
-                  <p className="subtitle" style={{ fontSize: '0.9rem' }}>Ajoute ton premier vêtement !</p>
-                </div>
+                <div style={{ textAlign: 'center', padding: '2rem 1rem' }}><div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧥</div><h3 className="title" style={{ fontSize: '1.2rem' }}>Dressing vide</h3><p className="subtitle" style={{ fontSize: '0.9rem' }}>Ajoute ton premier vêtement !</p></div>
               ) : (
-                <div className="item-grid">
-                  {items.map(item => (
+                <div className="item-grid">{items.map(item => (
                     <div key={item.id} className="item-card" onClick={() => handleUpdateLastWorn(item.id)}>
-                      <div className="item-image">
-                        {item.image_url ? <img src={item.image_url} alt={item.type} /> : <span>{item.icon || '👕'}</span>}
-                        <div className="worn-badge"><Calendar size={12} /></div>
-                      </div>
-                      <div className="item-info">
-                        <div className="item-type">{item.type}</div>
-                        <div className="item-meta">{item.activity} • {item.season}</div>
-                      </div>
+                      <div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <span>{item.icon || '👕'}</span>}<div className="worn-badge"><Calendar size={12} /></div></div>
+                      <div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.activity} • {item.season}</div></div>
                     </div>
-                  ))}
-                </div>
+                ))}</div>
               )}
             </motion.div>
           )}
 
-          {/* OUTFIT RESULT VIEW */}
+          {/* OUTFIT RESULT */}
           {view === 'outfit-result' && currentOutfit && (
             <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%', paddingBottom: '3rem' }}>
               <h2 className="title" style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>Tenue suggérée 🪄</h2>
               <p className="subtitle" style={{ marginBottom: '2rem' }}>{currentOutfit.explanation}</p>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {[currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id).map((id, idx) => {
-                  const item = findItemById(id)
-                  if (!item) return null
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>{[currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id).map((id, idx) => {
+                  const item = findItemById(id); if (!item) return null;
                   return (
                     <div key={idx} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1rem' }}>
-                      <div style={{ width: '80px', height: '80px', background: 'rgba(255,255,255,0.5)', borderRadius: '15px', overflow: 'hidden' }}>
-                        {item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '2rem', textAlign: 'center', lineHeight: '80px' }}>{item.icon}</div>}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 800 }}>{item.type}</div>
-                        <div className="subtitle" style={{ fontSize: '0.8rem' }}>{item.color} • {item.activity}</div>
-                      </div>
+                      <div style={{ width: '80px', height: '80px', background: 'rgba(255,255,255,0.5)', borderRadius: '15px', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '2rem', textAlign: 'center', lineHeight: '80px' }}>{item.icon}</div>}</div>
+                      <div><div style={{ fontWeight: 800 }}>{item.type}</div><div className="subtitle" style={{ fontSize: '0.8rem' }}>{item.color} • {item.activity}</div></div>
                     </div>
                   )
-                })}
-              </div>
-
+              })}</div>
               <div style={{ marginTop: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <button onClick={() => handleUpdateLastWorn([currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id))} className="btn-primary" style={{ display: 'flex', gap: '10px' }}>
-                  <Check size={20} /> Je porte ça aujourd'hui !
-                </button>
-                <button onClick={handleGenerateOutfitRequest} className="btn-secondary" style={{ display: 'flex', gap: '10px', background: 'rgba(255,255,255,0.5)' }}>
-                  <RefreshCw size={20} /> Autre proposition
-                </button>
+                <button onClick={() => handleUpdateLastWorn([currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id))} className="btn-primary"><Check size={20} /> Je porte ça aujourd'hui !</button>
+                <button onClick={handleGenerateOutfitRequest} className="btn-secondary"><RefreshCw size={20} /> Autre proposition</button>
               </div>
             </motion.div>
           )}
 
-          {/* SETTINGS VIEW */}
+          {/* SETTINGS */}
           {view === 'settings' && (
             <motion.div key="settings" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="dashboard-container" style={{ gap: '1rem', overflowY: 'auto' }}>
               <h2 className="title" style={{ fontSize: '2rem', marginBottom: '1rem' }}>Mon Profil</h2>
-              
               <div className="glass-card" style={{ padding: '1.2rem', background: 'rgba(255,255,255,0.4)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
-                  <ShieldCheck size={20} color="var(--primary)" />
-                  <h3 style={{ fontSize: '1rem' }}>Sécurité du compte</h3>
-                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}><ShieldCheck size={20} color="var(--primary)" /><h3 style={{ fontSize: '1rem' }}>Sécurité du compte</h3></div>
                 {email ? (
-                  <div style={{ background: 'white', padding: '0.8rem', borderRadius: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Check size={18} color="#10b981" />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{email}</span>
-                  </div>
+                  <div style={{ background: 'white', padding: '0.8rem', borderRadius: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}><Check size={18} color="#10b981" /><span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{email}</span></div>
                 ) : (
                   <>
                     <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '0.8rem' }} />
                     <button className="btn-primary" onClick={handleLinkEmail} disabled={!email || loading} style={{ marginTop: '0.8rem', padding: '0.8rem', fontSize: '0.9rem' }}>Sécuriser via Email</button>
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>Indispensable pour ne jamais perdre ton dressing !</p>
                   </>
                 )}
               </div>
-
               <div className="glass-card" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}>
-                  <LifeBuoy size={20} color="var(--primary)" />
-                  <span style={{ fontWeight: 600 }}>Contact & Support</span>
-                </button>
-                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}>
-                  <FileText size={20} color="var(--primary)" />
-                  <span style={{ fontWeight: 600 }}>Mentions Légales</span>
-                </button>
+                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}><LifeBuoy size={20} color="var(--primary)" /><span style={{ fontWeight: 600 }}>Contact & Support</span></button>
+                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '1rem', textAlign: 'left' }}><FileText size={20} color="var(--primary)" /><span style={{ fontWeight: 600 }}>Mentions Légales</span></button>
               </div>
-
               <div className="glass-card" style={{ padding: '1.2rem', background: 'rgba(244, 63, 94, 0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <button onClick={async () => { await supabase.auth.signOut(); setView('splash'); setUid(''); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <LogOut size={20} /> Déconnexion
-                </button>
-                <button onClick={handleDeleteAccount} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <Trash2 size={20} /> Supprimer mon compte
-                </button>
+                <button onClick={async () => { await supabase.auth.signOut(); setView('splash'); setUid(''); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}><LogOut size={20} /> Déconnexion</button>
+                <button onClick={handleDeleteAccount} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'none', border: 'none', color: '#f43f5e', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}><Trash2 size={20} /> Supprimer mon compte</button>
               </div>
             </motion.div>
           )}
 
-          {/* SPLASH VIEW */}
+          {/* RESET PASSWORD VIEW */}
+          {view === 'reset-password' && (
+            <motion.div key="reset-password" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-card my-auto">
+              <div style={{ textAlign: 'center', marginBottom: '2rem' }}><Lock size={48} color="var(--primary)" /></div>
+              <h2 className="title" style={{ fontSize: '2rem', marginBottom: '1.5rem', textAlign: 'center' }}>Nouveau mot de passe</h2>
+              <p className="subtitle" style={{ marginBottom: '2rem', textAlign: 'center' }}>Saisis ton nouveau mot de passe pour ton dressing.</p>
+              <input type="password" placeholder="Nouveau mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <button className="btn-primary" onClick={handleUpdatePassword} disabled={loading} style={{ marginTop: '2rem' }}>{loading ? <Loader2 className="animate-spin" /> : "Mettre à jour"}</button>
+            </motion.div>
+          )}
+
+          {/* SPLASH & LOGIN */}
           {view === 'splash' && (
-            <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div className="logo-container">
-                <RotatingClothes />
-                <h1 className="title" style={{ marginTop: '1rem' }}>Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1>
-                <p className="subtitle">L'IA au service de votre style.</p>
-              </div>
+            <motion.div key="splash" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="logo-container"><RotatingClothes /><h1 className="title" style={{ marginTop: '1rem' }}>Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
               <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
                 <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
                 <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
@@ -628,9 +547,8 @@ function App() {
             </motion.div>
           )}
 
-          {/* LOGIN CHOICES */}
           {view === 'login' && (
-            <motion.div key="login" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
+            <motion.div key="login" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} className="glass-card my-auto">
               <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Connexion</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -646,7 +564,7 @@ function App() {
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Code d'accès</h2>
               {error && <div style={{ color: '#f43f5e', fontSize: '0.8rem', marginBottom: '1rem', fontWeight: 700 }}>{error}</div>}
               <input type="text" placeholder="Ex: AB12 - CD34" className="input-styled" value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value)} maxLength={11} />
-              <button className="btn-primary" onClick={handleLogin} disabled={inputCode.length < 8 || loading} style={{ marginTop: '2rem' }}>{loading ? <Loader2 className="animate-spin" /> : <>Se connecter <ArrowRight size={20} /></>}</button>
+              <button className="btn-primary" onClick={handleLogin} disabled={inputCode.length < 8 || loading} style={{ marginTop: '2rem' }}>{loading ? <Loader2 className="animate-spin" /> : "Se connecter"}</button>
             </motion.div>
           )}
 
@@ -654,15 +572,16 @@ function App() {
             <motion.div key="login-email" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} className="glass-card my-auto">
               <button onClick={() => setView('login')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Email Login</h2>
-              <p className="subtitle" style={{ marginBottom: '1.5rem' }}>Nous t'enverrons un lien magique pour te connecter.</p>
+              <p className="subtitle" style={{ marginBottom: '1.5rem' }}>Entre ton email pour recevoir un lien magique ou réinitialiser ton mot de passe.</p>
               <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <button className="btn-primary" onClick={handleLoginEmail} disabled={!email || loading} style={{ marginTop: '2rem' }}>{loading ? <Loader2 className="animate-spin" /> : <>Envoyer le lien <Mail size={20} /></>}</button>
+              <button className="btn-primary" onClick={handleLoginEmail} disabled={!email || loading} style={{ marginTop: '2rem' }}><Mail size={20} /> Envoyer lien magique</button>
+              <button onClick={handleResetPasswordRequest} style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, marginTop: '1.5rem', cursor: 'pointer' }}>Mot de passe oublié ?</button>
             </motion.div>
           )}
 
           {/* REGISTER & SUCCESS */}
           {view === 'register' && (
-            <motion.div key="register" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="glass-card my-auto">
+            <motion.div key="register" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} className="glass-card my-auto">
               <button onClick={() => setView('splash')} className="btn-secondary" style={{ textAlign: 'left', padding: 0, width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
               <div style={{ marginBottom: '1.5rem' }}><RotatingClothes /></div>
               <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2.5rem', textAlign: 'center' }}>Nouveau Dressing</h2>
@@ -672,7 +591,7 @@ function App() {
                 <button className={`gender-btn ${gender === 'male' ? 'active' : ''}`} onClick={() => setGender('male')}>Homme</button>
                 <button className={`gender-btn ${gender === 'neutral' ? 'active' : ''}`} onClick={() => setGender('neutral')}>Neutre</button>
               </div>
-              <button className="btn-primary" onClick={handleRegister} disabled={!name || loading}>{loading ? <Loader2 className="animate-spin" /> : <>C'est parti <ArrowRight size={20} /></>}</button>
+              <button className="btn-primary" onClick={handleRegister} disabled={!name || loading}>C'est parti</button>
             </motion.div>
           )}
           {view === 'success' && (
@@ -689,13 +608,10 @@ function App() {
             </motion.div>
           )}
 
-          {/* ADD FLOW VIEWS (UNCHANGED) */}
+          {/* ADD FLOW (UNCHANGED) */}
           {view === 'add-choice' && (
             <motion.div key="add-choice" initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderRadius: '40px 40px 0 0', padding: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 className="title" style={{ fontSize: '1.6rem' }}>Ajouter un habit</h2>
-                <button onClick={() => setView('dashboard')} style={{ background: 'none', border: 'none' }}><X size={28} /></button>
-              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '1.6rem' }}>Ajouter un habit</h2><button onClick={() => setView('dashboard')} style={{ background: 'none', border: 'none' }}><X size={28} /></button></div>
               <input type="file" accept="image/*" capture="environment" ref={camInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
               <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
               <div style={{ display: 'flex', gap: '1rem' }}>
@@ -704,75 +620,29 @@ function App() {
               </div>
             </motion.div>
           )}
-
           {view === 'add-detail' && (
             <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container" style={{ width: '100%', paddingBottom: '3rem' }}>
-              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
-                {selectedImage ? <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: 'var(--radius-md)', maxHeight: '200px', objectFit: 'contain' }} /> : <div style={{ fontSize: '6rem' }}>👗</div>}
-                <p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Vérification des infos ✨</p>
-              </div>
-              <div className="glass-card" style={{ gap: '1.2rem', display: 'flex', flexDirection: 'column' }}>
-                <h2 className="title" style={{ fontSize: '1.6rem' }}>Détails</h2>
-                <div>
-                  <label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Type</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{['Haut', 'Bas', 'Robe', 'Veste', 'Chaussures', 'Accessoire'].map(t => (<span key={t} className={`tag-pill ${newItem.type === t ? 'active' : ''}`} onClick={() => setNewItem({...newItem, type: t})}>{t}</span>))}</div>
-                </div>
-                <div>
-                  <label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Couleur</label>
-                  <input type="text" className="input-styled" style={{ padding: '0.8rem' }} value={newItem.color} onChange={(e) => setNewItem({...newItem, color: e.target.value})} />
-                </div>
-                <div>
-                  <label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Saison</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{['Printemps', 'Été', 'Automne', 'Hiver', 'Toutes saisons'].map(s => (<span key={s} className={`tag-pill ${newItem.season === s ? 'active' : ''}`} onClick={() => setNewItem({...newItem, season: s})}>{s}</span>))}</div>
-                </div>
-                <div>
-                  <label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Activité</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{['Quotidien', 'Travail', 'Sport', 'Soirée', 'Détente'].map(a => (<span key={a} className={`tag-pill ${newItem.activity === a ? 'active' : ''}`} onClick={() => setNewItem({...newItem, activity: a})}>{a}</span>))}</div>
-                </div>
-                <button onClick={handleAddItem} className="btn-primary" disabled={loading} style={{ marginTop: '1rem' }}>{loading ? <Loader2 className="animate-spin" /> : <>Confirmer et ajouter</>}</button>
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>{selectedImage ? <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: 'var(--radius-md)', maxHeight: '200px', objectFit: 'contain' }} /> : <div style={{ fontSize: '6rem' }}>👗</div>}<p style={{ marginTop: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Vérification des infos ✨</p></div>
+              <div className="glass-card" style={{ gap: '1.2rem', display: 'flex', flexDirection: 'column' }}><h2 className="title" style={{ fontSize: '1.6rem' }}>Détails</h2>
+                <div><label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Type</label><div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{['Haut', 'Bas', 'Robe', 'Veste', 'Chaussures', 'Accessoire'].map(t => (<span key={t} className={`tag-pill ${newItem.type === t ? 'active' : ''}`} onClick={() => setNewItem({...newItem, type: t})}>{t}</span>))}</div></div>
+                <div><label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Couleur</label><input type="text" className="input-styled" style={{ padding: '0.8rem' }} value={newItem.color} onChange={(e) => setNewItem({...newItem, color: e.target.value})} /></div>
+                <div><label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Saison</label><div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{['Printemps', 'Été', 'Automne', 'Hiver', 'Toutes saisons'].map(s => (<span key={s} className={`tag-pill ${newItem.season === s ? 'active' : ''}`} onClick={() => setNewItem({...newItem, season: s})}>{s}</span>))}</div></div>
+                <div><label className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.4rem', display: 'block' }}>Activité</label><div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{['Quotidien', 'Travail', 'Sport', 'Soirée', 'Détente'].map(a => (<span key={a} className={`tag-pill ${newItem.activity === a ? 'active' : ''}`} onClick={() => setNewItem({...newItem, activity: a})}>{a}</span>))}</div></div>
+                <button onClick={handleAddItem} className="btn-primary" disabled={loading}>Confirmer</button>
               </div>
             </motion.div>
           )}
 
           {(view === 'loading-ai' || view === 'loading-outfit') && (
-            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}>
-              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>
-                {view === 'loading-ai' ? '🧠' : '🪄'}
-              </motion.div>
-              <h2 className="title" style={{ fontSize: '1.8rem' }}>{loadingPhrase}</h2>
-            </motion.div>
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-auto text-center" style={{ textAlign: 'center', width: '100%' }}><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>{view === 'loading-ai' ? '🧠' : '🪄'}</motion.div><h2 className="title" style={{ fontSize: '1.8rem' }}>{loadingPhrase}</h2></motion.div>
           )}
 
         </AnimatePresence>
 
-        {/* ALERTS MODAL (UNCHANGED) */}
-        <AnimatePresence>
-          {showAlertModal && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setShowAlertModal(false)}>
-              <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '80vh', overflowY: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <h2 className="title" style={{ fontSize: '1.5rem' }}>Oubliés du dressing</h2>
-                  <button onClick={() => setShowAlertModal(false)} style={{ background: 'none', border: 'none' }}><X size={24} /></button>
-                </div>
-                <p className="subtitle" style={{ marginBottom: '2rem' }}>Pièces de saison non portées depuis +60 jours.</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {forgottenItems.map(item => (
-                    <div key={item.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255,255,255,0.4)' }}>
-                      <div style={{ width: '50px', height: '50px', borderRadius: '10px', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span>{item.icon}</span>}</div>
-                      <div style={{ flex: 1, fontSize: '0.9rem', fontWeight: 700 }}>{item.type} ({item.color})</div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => setShowAlertModal(false)} className="action-btn-small"><Heart size={16} /></button>
-                        <button onClick={() => console.log('Vendre')} className="action-btn-small"><ShoppingBag size={16} /></button>
-                        <button onClick={() => console.log('Donner')} className="action-btn-small"><Trash2 size={16} /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setShowAlertModal(false)} className="btn-primary" style={{ marginTop: '2rem' }}>Fermer</button>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* ALERTS MODAL */}
+        <AnimatePresence>{showAlertModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setShowAlertModal(false)}><motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '80vh', overflowY: 'auto' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '1.5rem' }}>Oubliés du dressing</h2><button onClick={() => setShowAlertModal(false)} style={{ background: 'none', border: 'none' }}><X size={24} /></button></div><p className="subtitle" style={{ marginBottom: '2rem' }}>Pièces non portées depuis +60 jours.</p><div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>{forgottenItems.map(item => (<div key={item.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255,255,255,0.4)' }}><div style={{ width: '50px', height: '50px', borderRadius: '10px', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span>{item.icon}</span>}</div><div style={{ flex: 1, fontSize: '0.9rem', fontWeight: 700 }}>{item.type} ({item.color})</div><div style={{ display: 'flex', gap: '0.5rem' }}><button onClick={() => setShowAlertModal(false)} className="action-btn-small"><Heart size={16} /></button><button onClick={() => console.log('Vendre')} className="action-btn-small"><ShoppingBag size={16} /></button><button onClick={() => console.log('Donner')} className="action-btn-small"><Trash2 size={16} /></button></div></div>))}</div><button onClick={() => setShowAlertModal(false)} className="btn-primary" style={{ marginTop: '2rem' }}>Fermer</button></motion.div></motion.div>
+        )}</AnimatePresence>
 
         {isMainView && <BottomNav />}
       </div>
