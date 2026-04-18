@@ -9,7 +9,8 @@ import {
   Calendar, Trash2, Heart, ShoppingBag, Home, User,
   LifeBuoy, FileText, ShieldAlert, Key, Lock, Search,
   MapPin, Luggage, Plane, ListChecks, ChevronRight,
-  UserCircle, Edit3, Save, Info, MapPinned, History
+  UserCircle, Edit3, Save, Info, MapPinned, History,
+  Eye, EyeOff, UploadCloud
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import { App as CapApp } from '@capacitor/app'
@@ -43,11 +44,15 @@ function App() {
   const [gender, setGender] = useState('female')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState(null)
   const [isEmailConfirmed, setIsEmailConfirmed] = useState(false)
   const [uid, setUid] = useState('') 
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [inputCode, setInputCode] = useState('')
+  const [loginMode, setLoginMode] = useState('code') // 'code' ou 'email'
   
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
@@ -71,8 +76,11 @@ function App() {
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState(null)
 
+  const [tempAvatarFile, setTempAvatarFile] = useState(null)
+  const [avatarPreview, setAvatarPreview] = useState(null)
+
   const fileInputRef = useRef(null)
-  const camInputRef = useRef(null)
+  const avatarInputRef = useRef(null)
   const searchTimeoutRef = useRef(null)
 
   const ALL_TYPES = ['T-shirt', 'Crop-top', 'Hoodie', 'Sweat', 'Chemise', 'Polo', 'Top', 'Blouse', 'Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino', 'Robe', 'Veste', 'Blazer', 'Manteau', 'Parka', 'Trench', 'Cardigan', 'Pull', 'Maillot de bain', 'Pyjama', 'Basket', 'Bottes', 'Sandales', 'Escarpins', 'Accessoire', 'Sac', 'Casquette', 'Bonnet']
@@ -108,14 +116,11 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const userEmail = session.user.email
-        const userUuid = session.user.id
-        if (uid) await supabase.from('profiles').update({ email: userEmail, user_id: userUuid }).eq('id', uid)
-        setIsEmailConfirmed(true); setEmail(userEmail); await syncProfile(userEmail);
+        setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email);
       }
     })
     return () => subscription.unsubscribe()
-  }, [uid])
+  }, [])
 
   useEffect(() => {
     if (['dashboard', 'outfit-result', 'settings', 'travel'].includes(view)) {
@@ -138,8 +143,8 @@ function App() {
   const syncProfile = async (userEmail) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).single()
     if (profile) {
-      setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email);
-      await fetchItems(profile.id); if (['splash', 'login', 'register'].includes(view)) setView('dashboard');
+      setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email); setAvatarUrl(profile.avatar_url);
+      await fetchItems(profile.id); if (['splash', 'login', 'register', 'complete-profile'].includes(view)) setView('dashboard');
     }
   }
 
@@ -153,7 +158,7 @@ function App() {
     setLoading(true)
     try {
       await supabase.auth.signOut()
-      setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); 
+      setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setAvatarUrl(null);
       setSuitcase([]); setCurrentOutfit(null); setForgottenItems([]); setWeather(null); 
       setTravelData({ destination: '', lat: null, lon: null });
       localStorage.removeItem('suitcase'); localStorage.removeItem('travelData');
@@ -161,11 +166,55 @@ function App() {
     } catch (err) { alert("Erreur") } finally { setLoading(false) }
   }
 
-  const handleLinkEmail = async () => {
-    if (!email || isEmailConfirmed) return; setLoading(true)
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0]
+    if (file) { setTempAvatarFile(file); setAvatarPreview(URL.createObjectURL(file)); }
+  }
+
+  const handleDeleteAvatar = async () => {
+    if (!window.confirm("Supprimer la photo de profil ?")) return
+    setLoading(true)
     try {
-      await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
-      alert("Lien envoyé ! ✨")
+      if (avatarUrl) {
+        const path = avatarUrl.split('/').pop()
+        await supabase.storage.from('avatars').remove([path])
+      }
+      await supabase.from('profiles').update({ avatar_url: null }).eq('id', uid)
+      setAvatarUrl(null); setAvatarPreview(null); setTempAvatarFile(null);
+    } catch (err) { alert(err.message) } finally { setLoading(false) }
+  }
+
+  const handleCompleteProfile = async () => {
+    if (!email || !password || password !== confirmPassword) { alert("Vérifie tes mots de passe !"); return; }
+    setLoading(true)
+    try {
+      // 1. Vérifier si l'email existe déjà
+      const { data: existing } = await supabase.from('profiles').select('id').eq('email', email).single()
+      if (existing) throw new Error("Cet email est déjà lié à un autre dressing.")
+
+      // 2. Créer le compte Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
+      if (authError) throw authError
+
+      let finalAvatarUrl = avatarUrl
+
+      // 3. Uploader l'avatar si présent
+      if (tempAvatarFile) {
+        const fileName = `avatar-${uid}-${Date.now()}.jpg`
+        await supabase.storage.from('avatars').upload(fileName, tempAvatarFile)
+        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName)
+        finalAvatarUrl = publicUrl
+      }
+
+      // 4. Mettre à jour le profil
+      await supabase.from('profiles').update({ 
+        email, 
+        user_id: authData.user.id, 
+        avatar_url: finalAvatarUrl 
+      }).eq('id', uid)
+
+      setIsEmailConfirmed(true); setAvatarUrl(finalAvatarUrl); setView('dashboard')
+      alert("Profil finalisé ! Bienvenue officiellement ✨")
     } catch (err) { alert(err.message) } finally { setLoading(false) }
   }
 
@@ -246,11 +295,21 @@ function App() {
   }
 
   const handleLogin = async () => {
-    setLoading(true)
-    const cleanCode = inputCode.replace(/[^A-Z0-9]/g, '')
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', cleanCode).single()
-    if (!profile) { setError("Code invalide"); setLoading(false); return; }
-    setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); await fetchItems(profile.id); setView('dashboard'); setLoading(false)
+    setLoading(true); setError(null)
+    try {
+      if (loginMode === 'code') {
+        const cleanCode = inputCode.replace(/[^A-Z0-9]/g, '')
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', cleanCode).single()
+        if (!profile) throw new Error("Code invalide")
+        if (profile.email) throw new Error("Ce compte nécessite un mot de passe.")
+        setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); setAvatarUrl(profile.avatar_url);
+        await fetchItems(profile.id); setView('dashboard')
+      } else {
+        const { data, error: authErr } = await supabase.auth.signInWithPassword({ email, password })
+        if (authErr) throw authErr
+        await syncProfile(email);
+      }
+    } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
 
   const handleFileChange = async (e) => {
@@ -352,32 +411,36 @@ function App() {
             </motion.div>
           )}
 
-          {/* 3. LOGIN VIEW */}
+          {/* 3. LOGIN VIEW (HYBRIDE CODE / EMAIL) */}
           {view === 'login' && (
             <motion.div key="login" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
               <h2 className="title" style={{ textAlign: 'center' }}>Bon retour ! 👋</h2>
-              <p className="subtitle" style={{ textAlign: 'center' }}>Saisis ton code à 8 caractères pour retrouver ton dressing.</p>
-              <input type="text" placeholder="XXXX - XXXX" className="input-styled" style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '2px', marginTop: '2rem' }} value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value.toUpperCase())} maxLength={11} />
+              
+              <div className="filter-bar" style={{ margin: '1.5rem 0' }}>
+                <button className={`filter-pill ${loginMode === 'code' ? 'active' : ''}`} onClick={() => setLoginMode('code')}>Code Secret</button>
+                <button className={`filter-pill ${loginMode === 'email' ? 'active' : ''}`} onClick={() => setLoginMode('email')}>Email</button>
+              </div>
+
+              {loginMode === 'code' ? (
+                <>
+                  <p className="subtitle" style={{ textAlign: 'center' }}>Saisis ton code à 8 caractères.</p>
+                  <input type="text" placeholder="XXXX - XXXX" className="input-styled" style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '2px' }} value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value.toUpperCase())} maxLength={11} />
+                </>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <input type="email" placeholder="Email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <input type="password" placeholder="Mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </div>
+              )}
+
               {error && <div style={{ color: '#f43f5e', fontSize: '0.8rem', marginTop: '1rem', textAlign: 'center', fontWeight: 700 }}><AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: '5px' }} /> {error}</div>}
+              
               <button className="btn-primary" onClick={handleLogin} style={{ marginTop: '2rem' }} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Me connecter"}</button>
               <button onClick={() => setView('splash')} style={{ background: 'none', border: 'none', fontSize: '0.8rem', opacity: 0.5, fontWeight: 700, width: '100%', marginTop: '1rem' }}>Retour</button>
             </motion.div>
           )}
 
-          {/* 4. SUCCESS VIEW (SECRET CODE) */}
-          {view === 'success' && (
-            <motion.div key="success" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card my-auto" style={{ padding: '2.5rem', textAlign: 'center' }}>
-              <div style={{ background: '#10b981', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><Check size={35} /></div>
-              <h2 className="title">Bienvenue, {name} !</h2>
-              <p className="subtitle">Voici ton code secret. Note-le bien, il te permet de retrouver ton dressing partout.</p>
-              <div className="glass-card" style={{ background: 'rgba(255,255,255,0.5)', padding: '1.5rem', margin: '1.5rem 0', border: '2px dashed var(--primary)' }}>
-                <div style={{ fontSize: '1.8rem', fontWeight: 900, letterSpacing: '3px', color: 'var(--primary)' }}>{formatUID(uid)}</div>
-              </div>
-              <button onClick={() => setView('dashboard')} className="btn-primary">Découvrir mon dressing ✨</button>
-            </motion.div>
-          )}
-
-          {/* 5. DASHBOARD VIEW */}
+          {/* 4. DASHBOARD VIEW */}
           {view === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
               <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -420,7 +483,78 @@ function App() {
             </motion.div>
           )}
 
-          {/* 6. STYLIST VIEW */}
+          {/* 5. COMPLETE PROFILE VIEW (LE FORMULAIRE QUE TU AS DEMANDÉ) */}
+          {view === 'complete-profile' && (
+            <motion.div key="complete-profile" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="dashboard-container">
+              <header style={{ marginBottom: '1.5rem' }}>
+                <h2 className="title" style={{ fontSize: '2rem' }}>Finaliser mon profil 🛡️</h2>
+                <p className="subtitle">Protège ton dressing avec un mot de passe et une photo.</p>
+              </header>
+
+              <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* PHOTO DE PROFIL */}
+                <div style={{ textAlign: 'center' }}>
+                  <div onClick={() => avatarInputRef.current.click()} style={{ width: '100px', height: '100px', borderRadius: '50%', background: 'white', margin: '0 auto 1rem', position: 'relative', overflow: 'hidden', cursor: 'pointer', border: '3px solid var(--primary)' }}>
+                    {avatarPreview || avatarUrl ? <img src={avatarPreview || avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Camera size={30} color="var(--primary)" /></div>}
+                    <div style={{ position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.4)', color: 'white', fontSize: '0.6rem', padding: '2px 0' }}>MODIFIER</div>
+                  </div>
+                  <input type="file" ref={avatarInputRef} hidden onChange={handleAvatarChange} accept="image/*" />
+                  {(avatarPreview || avatarUrl) && <button onClick={handleDeleteAvatar} style={{ background: 'none', border: 'none', color: '#f43f5e', fontSize: '0.75rem', fontWeight: 800 }}>Supprimer la photo</button>}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 800, opacity: 0.6 }}>INFOS DE CONNEXION</div>
+                  <input type="email" placeholder="Ton email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <input type="password" placeholder="Mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <input type="password" placeholder="Confirmer le mot de passe" className="input-styled" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                </div>
+
+                <button className="btn-primary" onClick={handleCompleteProfile} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Sécuriser mon dressing ✨"}</button>
+                <button onClick={() => setView('settings')} style={{ background: 'none', border: 'none', fontSize: '0.8rem', opacity: 0.5, fontWeight: 700 }}>Plus tard</button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* 6. SETTINGS VIEW */}
+          {view === 'settings' && (
+            <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
+              <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
+              <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
+                <div style={{ position: 'relative', width: '90px', height: '90px', margin: '0 auto 1.5rem' }}>
+                  <div className="profile-avatar" style={{ overflow: 'hidden' }}>{avatarUrl ? <img src={avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (gender === 'female' ? '👩' : '👨')}</div>
+                  {isEmailConfirmed && <div style={{ position: 'absolute', bottom: 0, right: 0, background: '#10b981', color: 'white', borderRadius: '50%', padding: '4px' }}><ShieldCheck size={16} /></div>}
+                </div>
+                
+                <h3 className="title" style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>{name || 'Utilisateur'}</h3>
+                
+                {isEmailConfirmed ? (
+                  <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 700, marginBottom: '1.5rem' }}>{email}</div>
+                ) : (
+                  <button className="btn-primary" onClick={() => setView('complete-profile')} style={{ marginBottom: '1.5rem' }}><ShieldCheck size={18} /> Sécuriser mon compte 🛡️</button>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  {!isEmailConfirmed && <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.5rem' }}>Lier ton email te permet de retrouver ton dressing même si tu perds ton téléphone.</p>}
+                  <button className="btn-secondary" onClick={() => setView('complete-profile')} style={{ width: '100%' }}>Modifier mon profil</button>
+                  <button className="btn-secondary" onClick={handleLogout} style={{ color: '#f43f5e', width: '100%' }} disabled={loading}><LogOut size={20} /> {loading ? "Déconnexion..." : "Déconnexion"}</button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ... AUTRES VUES (DÉJÀ CODÉES) ... */}
+          {view === 'success' && (
+            <motion.div key="success" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card my-auto" style={{ padding: '2.5rem', textAlign: 'center' }}>
+              <div style={{ background: '#10b981', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><Check size={35} /></div>
+              <h2 className="title">Bienvenue, {name} !</h2>
+              <p className="subtitle">Voici ton code secret. Note-le bien, il te permet de retrouver ton dressing partout.</p>
+              <div className="glass-card" style={{ background: 'rgba(255,255,255,0.5)', padding: '1.5rem', margin: '1.5rem 0', border: '2px dashed var(--primary)' }}>
+                <div style={{ fontSize: '1.8rem', fontWeight: 900, letterSpacing: '3px', color: 'var(--primary)' }}>{formatUID(uid)}</div>
+              </div>
+              <button onClick={() => setView('dashboard')} className="btn-primary">Découvrir mon dressing ✨</button>
+            </motion.div>
+          )}
+
           {view === 'outfit-result' && (
             <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ marginBottom: '1.5rem' }}>
@@ -433,7 +567,6 @@ function App() {
                   <p className="subtitle">Aucune tenue générée.</p>
                 )}
               </header>
-
               {!outfitLoading && currentOutfit && (
                 <>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
@@ -460,7 +593,6 @@ function App() {
             </motion.div>
           )}
 
-          {/* 7. TRAVEL VIEW */}
           {view === 'travel' && (
             <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
@@ -479,21 +611,6 @@ function App() {
             </motion.div>
           )}
 
-          {/* 8. SETTINGS VIEW */}
-          {view === 'settings' && (
-            <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
-              <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
-              <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
-                <div className="profile-avatar">{gender === 'female' ? '👩' : '👨'}</div>
-                <h3 className="title" style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>{name || 'Utilisateur'}</h3>
-                <input type="email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isEmailConfirmed} style={{ marginBottom: '1rem', textAlign: 'center' }} />
-                {!isEmailConfirmed && <button className="btn-primary" onClick={handleLinkEmail} style={{ marginBottom: '1rem' }}>Lier mon email 🪄</button>}
-                <button className="btn-secondary" onClick={handleLogout} style={{ color: '#f43f5e', width: '100%' }} disabled={loading}><LogOut size={20} /> {loading ? "Déconnexion..." : "Déconnexion"}</button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* 9. ADD DETAIL VIEW */}
           {view === 'add-detail' && (
             <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
               <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>{selectedImage && <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: '20px', maxHeight: '180px', objectFit: 'contain' }} />}</div>
@@ -519,7 +636,6 @@ function App() {
 
         </AnimatePresence>
 
-        {/* BOTTOM NAVIGATION */}
         {isMainView && <BottomNav />}
 
         {/* MODAL CITY SEARCH */}

@@ -1,14 +1,15 @@
 -- ########################################################
--- # MASTER SCHEMA FOR DRESSFLOW - SUPABASE (SECURED)
+-- # MASTER SCHEMA FOR DRESSFLOW - SUPABASE (SECURED + AVATARS)
 -- ########################################################
 
 -- 1. PROFILES TABLE
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY, -- 8-digit custom code
-  user_id UUID REFERENCES auth.users(id), -- Lien vers Supabase Auth (SÉCURITÉ)
+  user_id UUID REFERENCES auth.users(id), 
   name TEXT,
   gender TEXT,
   email TEXT UNIQUE,
+  avatar_url TEXT, -- NOUVEAU : Photo de profil
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -28,17 +29,15 @@ CREATE TABLE IF NOT EXISTS clothes (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. SECURITY (RLS) - ÉTAPE 1 PHASE 1 (CORRIGÉ)
+-- 3. SECURITY (RLS)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clothes ENABLE ROW LEVEL SECURITY;
 
--- Politique pour PROFILES
 DROP POLICY IF EXISTS "Users can only access their own profile" ON profiles;
 CREATE POLICY "Users can only access their own profile" 
 ON profiles FOR ALL 
-USING (auth.uid() = user_id);
+USING (auth.uid() = user_id OR (user_id IS NULL AND id IS NOT NULL)); -- Autorise l'accès temporaire via code
 
--- Politique pour CLOTHES
 DROP POLICY IF EXISTS "Users can only access their own clothes" ON clothes;
 CREATE POLICY "Users can only access their own clothes" 
 ON clothes FOR ALL 
@@ -46,17 +45,20 @@ USING (
   EXISTS (
     SELECT 1 FROM profiles 
     WHERE profiles.id = clothes.profile_id 
-    AND profiles.user_id = auth.uid()
+    AND (profiles.user_id = auth.uid() OR profiles.user_id IS NULL)
   )
 );
 
 -- 4. PERFORMANCE INDEXES
 CREATE INDEX IF NOT EXISTS idx_clothes_profile ON clothes(profile_id);
-CREATE INDEX IF NOT EXISTS idx_clothes_type ON clothes(type);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_unique ON profiles(email) WHERE email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 
--- 5. TRIGGER UPDATED_AT
+-- 5. STORAGE BUCKETS (Note: Manual creation in dashboard recommended)
+-- clothes-images: Public=true
+-- avatars: Public=true
+
+-- 6. TRIGGER UPDATED_AT
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
