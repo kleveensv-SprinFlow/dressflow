@@ -48,7 +48,6 @@ function App() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   
-  // Weather states (ÉTAPE 5 PHASE 2)
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -70,6 +69,7 @@ function App() {
 
   const fileInputRef = useRef(null)
   const camInputRef = useRef(null)
+  const searchTimeoutRef = useRef(null) // ÉTAPE 1 PHASE 3 : Ref pour le Debounce
 
   const ALL_TYPES = ['T-shirt', 'Crop-top', 'Hoodie', 'Sweat', 'Chemise', 'Polo', 'Top', 'Blouse', 'Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino', 'Robe', 'Veste', 'Blazer', 'Manteau', 'Parka', 'Trench', 'Cardigan', 'Pull', 'Maillot de bain', 'Pyjama', 'Basket', 'Bottes', 'Sandales', 'Escarpins', 'Accessoire', 'Sac', 'Casquette', 'Bonnet']
   const ALL_COLORS = ['Blanc', 'Noir', 'Gris', 'Beige', 'Marine', 'Bleu Ciel', 'Kaki', 'Vert Sapin', 'Bordeaux', 'Rouge', 'Rose Poudré', 'Rose', 'Moutarde', 'Jaune', 'Lilas', 'Violet', 'Terracotta', 'Orange', 'Or', 'Argent', 'Marron', 'Camel']
@@ -107,24 +107,15 @@ function App() {
   }, [view, items])
 
   const initWeather = async (lat = null, lon = null, cityName = null) => {
-    setWeatherLoading(true)
-    setWeatherError(null)
+    setWeatherLoading(true); setWeatherError(null)
     try {
-      const data = await getLocalWeather(lat, lon)
-      if (cityName) data.city = cityName
-      setWeather(data)
-    } catch (err) {
-      setWeatherError("Géolocalisation refusée ou indisponible.")
-    } finally {
-      setWeatherLoading(false)
-    }
+      const data = await getLocalWeather(lat, lon); if (cityName) data.city = cityName; setWeather(data)
+    } catch (err) { setWeatherError("Position introuvable.") } finally { setWeatherLoading(false) }
   }
 
   const checkUserSession = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user?.email) {
-      setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email);
-    }
+    if (session?.user?.email) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
   }
 
   const syncProfile = async (userEmail) => {
@@ -187,8 +178,20 @@ function App() {
     await fetchItems(uid); setView('dashboard')
   }
 
-  const handleCitySearch = async (val) => {
-    setCitySearch(val); if (val.length > 2) setCityResults(await searchCity(val))
+  const handleCitySearch = (val) => {
+    setCitySearch(val)
+    
+    // ÉTAPE 1 PHASE 3 : Implémentation du DEBOUNCE
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+    
+    if (val.length > 2) {
+      searchTimeoutRef.current = setTimeout(async () => {
+        const results = await searchCity(val)
+        setCityResults(results)
+      }, 500) // On attend 500ms sans frappe avant d'appeler l'API
+    } else {
+      setCityResults([])
+    }
   }
 
   const handleSelectCity = (city) => {
@@ -283,10 +286,9 @@ function App() {
                 <div onClick={() => { setCityModalMode('home'); setShowCityModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', cursor: 'pointer', background: 'white', padding: '6px 12px', borderRadius: '12px' }}><MapPin size={14} /> {weather?.city || 'Localiser'}</div>
               </header>
 
-              {/* SECTION MÉTÉO AMÉLIORÉE (ÉTAPE 5 PHASE 2) */}
               <div className="glass-card" onClick={() => { setCityModalMode('home'); setShowCityModal(true); }} style={{ padding: '1.2rem', marginBottom: '1.5rem', cursor: 'pointer' }}>
                 {weatherLoading ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><Loader2 className="animate-spin" size={24} color="var(--primary)" /> <div className="subtitle">Localisation en cours...</div></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><Loader2 className="animate-spin" size={24} color="var(--primary)" /> <div className="subtitle">Localisation...</div></div>
                 ) : weatherError ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#f43f5e' }}><AlertCircle size={24} /> <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>Position introuvable</div></div> <div style={{ background: 'var(--primary)', color: 'white', padding: '6px 12px', borderRadius: '10px', fontSize: '0.75rem' }}>Choisir une ville</div></div>
                 ) : (
@@ -302,7 +304,6 @@ function App() {
             </motion.div>
           )}
 
-          {/* OTHERS VIEWS REMAIN UNCHANGED BUT FETCHED */}
           {view === 'travel' && (
             <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
@@ -360,17 +361,6 @@ function App() {
                   <select className="input-styled" value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
                 </div>
                 <button onClick={handleAddItem} className="btn-primary" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Confirmer ✨"}</button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* AUTH FLOWS */}
-          {view === 'splash' && (
-            <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
-              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
-                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
-                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
               </div>
             </motion.div>
           )}
