@@ -139,7 +139,7 @@ function App() {
     const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).single()
     if (profile) {
       setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email);
-      await fetchItems(profile.id); if (view === 'splash' || view === 'login') setView('dashboard');
+      await fetchItems(profile.id); if (view === 'splash' || view === 'login' || view === 'register') setView('dashboard');
     }
   }
 
@@ -235,7 +235,14 @@ function App() {
   }
 
   const handleRegister = async () => {
-    setLoading(true); const newUid = generateRandomUID(); await supabase.from('profiles').insert([{ id: newUid, name, gender }]); setUid(newUid); setView('dashboard'); setLoading(false)
+    if (!name) { alert("Prénom requis !"); return; }
+    setLoading(true)
+    try {
+      const newUid = generateRandomUID()
+      const { error } = await supabase.from('profiles').insert([{ id: newUid, name, gender }])
+      if (error) throw error
+      setUid(newUid); setView('success')
+    } catch (err) { alert(err.message) } finally { setLoading(false) }
   }
 
   const handleLogin = async () => {
@@ -346,7 +353,7 @@ function App() {
             </motion.div>
           )}
 
-          {/* SECTION STYLISTE (CORRIGÉ : PLUS DE PAGE BLANCHE) */}
+          {/* SECTION STYLISTE */}
           {view === 'outfit-result' && (
             <motion.div key="outfit-result" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ marginBottom: '1.5rem' }}>
@@ -404,6 +411,56 @@ function App() {
             </motion.div>
           )}
 
+          {/* VUE D'INSCRIPTION (CORRIGÉ : PLUS DE PAGE VIDE) */}
+          {view === 'register' && (
+            <motion.div key="register" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
+              <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+                <div style={{ background: 'var(--primary)', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><UserCircle size={35} /></div>
+                <h2 className="title">Créer mon dressing</h2>
+                <p className="subtitle">On commence par faire connaissance ?</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '0.5rem', display: 'block', opacity: 0.6 }}>TON PRÉNOM</label>
+                  <input type="text" placeholder="Ex: Marie" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '0.5rem', display: 'block', opacity: 0.6 }}>TON STYLE PRÉFÉRÉ</label>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button onClick={() => setGender('female')} className={`btn-secondary ${gender === 'female' ? 'active' : ''}`} style={{ flex: 1, border: gender === 'female' ? '2px solid var(--primary)' : 'none' }}>👩 Femme</button>
+                    <button onClick={() => setGender('male')} className={`btn-secondary ${gender === 'male' ? 'active' : ''}`} style={{ flex: 1, border: gender === 'male' ? '2px solid var(--primary)' : 'none' }}>👨 Homme</button>
+                  </div>
+                </div>
+                <button onClick={handleRegister} className="btn-primary" style={{ marginTop: '1rem' }} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "C'est parti ! ✨"}</button>
+                <button onClick={() => setView('splash')} style={{ background: 'none', border: 'none', fontSize: '0.8rem', opacity: 0.5, fontWeight: 700 }}>Retour</button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* VUE SUCCESS (POUR LE CODE SECRET) */}
+          {view === 'success' && (
+            <motion.div key="success" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card my-auto" style={{ padding: '2.5rem', textAlign: 'center' }}>
+              <div style={{ background: '#10b981', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><Check size={35} /></div>
+              <h2 className="title">Bienvenue, {name} !</h2>
+              <p className="subtitle">Voici ton code secret. Note-le bien, il te permet de retrouver ton dressing partout.</p>
+              <div className="glass-card" style={{ background: 'rgba(255,255,255,0.5)', padding: '1.5rem', margin: '1.5rem 0', border: '2px dashed var(--primary)' }}>
+                <div style={{ fontSize: '1.8rem', fontWeight: 900, letterSpacing: '3px', color: 'var(--primary)' }}>{formatUID(uid)}</div>
+              </div>
+              <button onClick={() => setView('dashboard')} className="btn-primary">Découvrir mon dressing ✨</button>
+            </motion.div>
+          )}
+
+          {view === 'login' && (
+            <motion.div key="login" initial={{ x: 100 }} animate={{ x: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
+              <h2 className="title" style={{ textAlign: 'center' }}>Bon retour ! 👋</h2>
+              <p className="subtitle" style={{ textAlign: 'center' }}>Saisis ton code à 8 caractères pour retrouver ton dressing.</p>
+              <input type="text" placeholder="XXXX - XXXX" className="input-styled" style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '2px', marginTop: '2rem' }} value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value.toUpperCase())} maxLength={11} />
+              {error && <div style={{ color: '#f43f5e', fontSize: '0.8rem', marginTop: '1rem', textAlign: 'center', fontWeight: 700 }}><AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: '5px' }} /> {error}</div>}
+              <button className="btn-primary" onClick={handleLogin} style={{ marginTop: '2rem' }} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Me connecter"}</button>
+              <button onClick={() => setView('splash')} style={{ background: 'none', border: 'none', fontSize: '0.8rem', opacity: 0.5, fontWeight: 700, width: '100%', marginTop: '1rem' }}>Retour</button>
+            </motion.div>
+          )}
+
           {view === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
               <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
@@ -417,13 +474,25 @@ function App() {
             </motion.div>
           )}
 
-          {/* SPLASH & LOGIN VIEWS */}
-          {view === 'splash' && (
-            <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
-              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
-                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
-                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
+          {view === 'add-detail' && (
+            <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>{selectedImage && <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: '20px', maxHeight: '180px', objectFit: 'contain' }} />}</div>
+              <div className="glass-card" style={{ gap: '1.2rem', display: 'flex', flexDirection: 'column' }}>
+                <h2 className="title" style={{ fontSize: '1.4rem' }}>Vêtement détecté ✨</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 800, opacity: 0.6 }}>TYPE & COULEUR</div>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <select className="input-styled" style={{ flex: 2 }} value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value, icon: getIconForType(e.target.value)})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                    <select className="input-styled" style={{ flex: 1 }} value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 800, opacity: 0.6, marginTop: '0.5rem' }}>ACTIVITÉ</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {ALL_ACTIVITIES.map(act => (
+                      <button key={act} onClick={() => setNewItem({...newItem, activity: act})} className={`filter-pill ${newItem.activity === act ? 'active' : ''}`} style={{ fontSize: '0.75rem' }}>{act}</button>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={handleAddItem} className="btn-primary" style={{ marginTop: '1rem' }} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Ajouter au dressing ✨"}</button>
               </div>
             </motion.div>
           )}
