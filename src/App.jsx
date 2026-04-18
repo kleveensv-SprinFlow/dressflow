@@ -73,6 +73,7 @@ function App() {
 
   const [newItem, setNewItem] = useState({ type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
+  const [tempFile, setTempFile] = useState(null) // ÉTAPE 3 PHASE 2 : Fichier temporaire local
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
   
@@ -125,23 +126,9 @@ function App() {
     setLoading(true)
     try {
       await supabase.auth.signOut()
-      // RESET TOTAL DES ÉTATS (ÉTAPE 2 PHASE 2)
-      setUid('')
-      setName('')
-      setEmail('')
-      setItems([])
-      setIsEmailConfirmed(false)
-      setSuitcase([])
-      setCurrentOutfit(null)
-      setForgottenItems([])
-      setError(null)
-      setTravelData({ destination: '', lat: null, lon: null })
-      setView('splash')
-    } catch (err) {
-      alert("Erreur déconnexion")
-    } finally {
-      setLoading(false)
-    }
+      setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setSuitcase([]); setCurrentOutfit(null); setForgottenItems([]); setError(null); setTravelData({ destination: '', lat: null, lon: null }); setView('splash')
+    } catch (err) { alert("Erreur déconnexion") }
+    finally { setLoading(false) }
   }
 
   const handleLinkEmail = async () => {
@@ -155,11 +142,24 @@ function App() {
   }
 
   const handleAddItem = async () => {
-    if (!uid) return; setLoading(true)
+    if (!uid || !tempFile) return; setLoading(true)
     try {
-      await supabase.from('clothes').insert([{ profile_id: uid, ...newItem, image_url: selectedImage, last_worn_date: new Date().toISOString() }])
-      await fetchItems(uid); setView('dashboard'); setSelectedImage(null)
-    } catch (err) { alert(err.message) }
+      // SOLUTION ÉTAPE 3 PHASE 2 : On n'upload qu'au moment de confirmer
+      const fileName = `${uid}-${Date.now()}.jpg`
+      const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, tempFile)
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
+
+      await supabase.from('clothes').insert([{ 
+        profile_id: uid, 
+        ...newItem, 
+        image_url: publicUrl, 
+        last_worn_date: new Date().toISOString() 
+      }])
+      
+      await fetchItems(uid); setView('dashboard'); setSelectedImage(null); setTempFile(null)
+    } catch (err) { alert("Erreur lors de l'ajout : " + err.message) }
     finally { setLoading(false) }
   }
 
@@ -230,12 +230,12 @@ function App() {
     if (file) {
       setView('loading-ai'); setLoading(true)
       try {
-        const fileName = `${uid}-${Date.now()}.jpg`
-        await supabase.storage.from('clothes-images').upload(fileName, file)
-        const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
+        // SOLUTION ÉTAPE 3 PHASE 2 : Analyse locale et prévisualisation locale
         const aiTags = await analyzeClothing(file)
         setNewItem({ ...newItem, ...aiTags, icon: getIconForType(aiTags.type) })
-        setSelectedImage(publicUrl); setView('add-detail')
+        setTempFile(file)
+        setSelectedImage(URL.createObjectURL(file))
+        setView('add-detail')
       } catch (err) { setView('add-detail') }
       finally { setLoading(false) }
     }
@@ -345,24 +345,17 @@ function App() {
             </motion.div>
           )}
 
-          {/* AUTH FLOWS */}
-          {view === 'splash' && (
-            <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
-              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}>
-                <button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button>
-                <button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button>
+          {view === 'add-detail' && (
+            <motion.div key="add-detail" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>{selectedImage && <img src={selectedImage} alt="Preview" style={{ width: '100%', borderRadius: '20px', maxHeight: '180px', objectFit: 'contain' }} />}</div>
+              <div className="glass-card" style={{ gap: '1.5rem', display: 'flex', flexDirection: 'column' }}>
+                <h2 className="title" style={{ fontSize: '1.6rem' }}>Détails détectés</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <select className="input-styled" value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value, icon: getIconForType(e.target.value)})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                  <select className="input-styled" value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                </div>
+                <button onClick={handleAddItem} className="btn-primary" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Confirmer ✨"}</button>
               </div>
-            </motion.div>
-          )}
-
-          {showCityModal && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="modal-overlay" onClick={() => setShowCityModal(false)}>
-              <motion.div className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}>
-                <h2 className="title" style={{ fontSize: '1.6rem', marginBottom: '1.5rem' }}>{cityModalMode === 'home' ? 'Changer de ville' : 'Destination'}</h2>
-                <input type="text" placeholder="Rechercher une ville..." className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} />
-                <div style={{ maxHeight: '250px', overflowY: 'auto', marginTop: '1rem' }}>{cityResults.map(city => (<div key={city.id} onClick={() => handleSelectCity(city)} className="btn-secondary" style={{ marginBottom: '0.5rem', textAlign: 'left' }}>{city.name} ({city.country})</div>))}</div>
-              </motion.div>
             </motion.div>
           )}
 
