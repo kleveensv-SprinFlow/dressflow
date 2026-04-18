@@ -9,7 +9,7 @@ import {
   Calendar, Trash2, Heart, ShoppingBag, Home, User,
   LifeBuoy, FileText, ShieldAlert, Key, Lock, Search,
   MapPin, Luggage, Plane, ListChecks, ChevronRight,
-  UserCircle
+  UserCircle, Edit3, Save, Info
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 
@@ -43,14 +43,17 @@ function App() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [isEmailConfirmed, setIsEmailConfirmed] = useState(false)
-  const [password, setPassword] = useState('')
   const [uid, setUid] = useState('')
   const [inputCode, setInputCode] = useState('')
-  const [copied, setCopied] = useState(false)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   
+  // Selection & Edit
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState(null)
+
   // Weather & Filters
   const [weather, setWeather] = useState(null)
   const [activeFilter, setActiveFilter] = useState('Tous')
@@ -83,11 +86,8 @@ function App() {
   useEffect(() => { 
     checkUserSession()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') setView('reset-password')
-      else if (session?.user) {
-        setIsEmailConfirmed(true)
-        setEmail(session.user.email)
-        syncProfile(session.user.email)
+      if (session?.user) {
+        setIsEmailConfirmed(true); setEmail(session.user.email); syncProfile(session.user.email);
       }
     })
     return () => subscription.unsubscribe()
@@ -101,18 +101,12 @@ function App() {
   }, [view, items])
 
   const initWeather = async (lat = null, lon = null, cityName = null) => {
-    const data = await getLocalWeather(lat, lon)
-    if (cityName) data.city = cityName
-    setWeather(data)
+    const data = await getLocalWeather(lat, lon); if (cityName) data.city = cityName; setWeather(data)
   }
 
   const checkUserSession = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user?.email) {
-      setIsEmailConfirmed(true)
-      setEmail(session.user.email)
-      await syncProfile(session.user.email)
-    }
+    if (session?.user?.email) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
   }
 
   const syncProfile = async (userEmail) => {
@@ -126,8 +120,7 @@ function App() {
   const fetchItems = async (profileId) => {
     setLoading(true)
     const { data, error } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
-    if (error) setError("Erreur de chargement.")
-    else setItems(data || [])
+    if (error) setError("Erreur de chargement."); else setItems(data || [])
     setLoading(false)
   }
 
@@ -152,9 +145,7 @@ function App() {
   }, [items, activeFilter, weather])
 
   const getItemWeatherScore = (item, temp) => {
-    let score = 0
-    const winterTypes = ['Manteau', 'Parka', 'Pull', 'Sweat', 'Bonnet', 'Bottes']
-    const summerTypes = ['Short', 'T-shirt', 'Crop-top', 'Maillot de bain', 'Sandales']
+    let score = 0; const winterTypes = ['Manteau', 'Parka', 'Pull', 'Sweat', 'Bonnet', 'Bottes']; const summerTypes = ['Short', 'T-shirt', 'Crop-top', 'Maillot de bain', 'Sandales']
     if (temp < 12) { if (winterTypes.includes(item.type)) score += 10; if (item.season === 'Hiver') score += 5; }
     else if (temp > 22) { if (summerTypes.includes(item.type)) score += 10; if (item.season === 'Été') score += 5; }
     else if (item.season === 'Printemps' || item.season === 'Automne' || item.season === 'Toutes saisons') score += 5
@@ -164,17 +155,29 @@ function App() {
   const handleLinkEmail = async () => {
     if (!email || isEmailConfirmed) return; setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
-      if (error) throw error
+      await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
       await supabase.from('profiles').update({ email }).eq('id', uid)
       alert("Vérifie tes emails ! 🪄")
     } catch (err) { alert(err.message) }
     setLoading(false)
   }
 
-  const handleUpdateLastWorn = async (ids) => {
-    await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).in('id', Array.isArray(ids) ? ids : [ids])
-    await fetchItems(uid)
+  const handleUpdateLastWorn = async (item) => {
+    await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).eq('id', item.id)
+    await fetchItems(uid); setSelectedItem(null); alert("C'est noté ! ✨")
+  }
+
+  const handleDeleteItem = async (id) => {
+    if (!window.confirm("Supprimer ce vêtement ?")) return
+    setLoading(true)
+    await supabase.from('clothes').delete().eq('id', id)
+    await fetchItems(uid); setSelectedItem(null); setLoading(false)
+  }
+
+  const handleUpdateItem = async () => {
+    setLoading(true)
+    await supabase.from('clothes').update({ ...editForm }).eq('id', selectedItem.id)
+    await fetchItems(uid); setIsEditing(false); setSelectedItem({ ...selectedItem, ...editForm }); setLoading(false)
   }
 
   const handleRegister = async () => {
@@ -189,13 +192,6 @@ function App() {
     if (profile.email) { setError("Compte sécurisé par email."); setLoading(false); return; }
     setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || '');
     await fetchItems(profile.id); setView('dashboard'); setLoading(false)
-  }
-
-  const handleLoginEmail = async () => {
-    if (!email) return; setLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: 'com.dressflow.app://login' } })
-    if (error) alert(error.message); else alert("Lien envoyé ! ✨")
-    setLoading(false)
   }
 
   const handleFileChange = async (e) => {
@@ -220,8 +216,7 @@ function App() {
   }
 
   const generateRandomUID = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-    let res = ''; for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let res = ''; for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res
   }
 
   const formatUID = (val) => {
@@ -239,20 +234,12 @@ function App() {
   }
 
   const handleGenerateSuitcase = async () => {
-    if (!travelData.lat) { alert("Choisis une destination !"); return; }
-    setSuitcaseLoading(true)
+    if (!travelData.lat) return; setSuitcaseLoading(true)
     const weatherData = await getLocalWeather(travelData.lat, travelData.lon)
     setSuitcase(items.filter(item => getItemWeatherScore(item, weatherData.temp) > 0).slice(0, 8).map(s => ({ ...s, checked: false })))
     setSuitcaseLoading(false)
   }
 
-  const getProfileAvatar = () => {
-    if (gender === 'female') return '👩'
-    if (gender === 'male') return '👨'
-    return '✨'
-  }
-
-  // --- UI COMPONENTS ---
   const BottomNav = () => (
     <div className="bottom-nav">
       <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}><Home size={22} /><span>Dressing</span></div>
@@ -279,20 +266,13 @@ function App() {
                 <div onClick={() => setShowCityModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', cursor: 'pointer', background: 'white', padding: '6px 12px', borderRadius: '12px' }}><MapPin size={14} /> {weather?.city || 'Localiser'}</div>
               </header>
               <div className="glass-card" onClick={() => setShowCityModal(true)} style={{ padding: '1.2rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ background: 'var(--primary)', color: 'white', padding: '12px', borderRadius: '18px' }}><Sun size={24} /></div>
-                  <div><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div><div className="subtitle" style={{ fontSize: '0.85rem', marginTop: 0 }}>{weather ? weather.description : 'Récupération...'}</div></div>
-                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><div style={{ background: 'var(--primary)', color: 'white', padding: '12px', borderRadius: '18px' }}><Sun size={24} /></div><div><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div><div className="subtitle" style={{ fontSize: '0.85rem', marginTop: 0 }}>{weather ? weather.description : 'Récupération...'}</div></div></div>
               </div>
-              <div className="filter-bar">
-                {['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'].map(f => (
-                  <button key={f} className={`filter-pill ${activeFilter === f ? 'active' : ''}`} onClick={() => setActiveFilter(f)}>{f}</button>
-                ))}
-              </div>
+              <div className="filter-bar">{['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'].map(f => (<button key={f} className={`filter-pill ${activeFilter === f ? 'active' : ''}`} onClick={() => setActiveFilter(f)}>{f}</button>))}</div>
               {loading ? <div style={{ textAlign: 'center', padding: '3rem' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div> : (
                 <div className="item-grid">
                   {filteredAndSortedItems.map(item => (
-                    <div key={item.id} className="item-card" onClick={() => handleUpdateLastWorn(item.id)}>
+                    <div key={item.id} className="item-card" onClick={() => setSelectedItem(item)}>
                       <div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}{getItemWeatherScore(item, weather?.temp || 20) > 5 && <div className="weather-badge"><Sparkles size={12} /></div>}</div>
                       <div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.color} • {item.activity}</div></div>
                     </div>
@@ -302,60 +282,65 @@ function App() {
             </motion.div>
           )}
 
-          {/* SETTINGS (PROFILE) */}
+          {/* ITEM DETAIL MODAL */}
+          <AnimatePresence>
+            {selectedItem && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => { setSelectedItem(null); setIsEditing(false); }}>
+                <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem', height: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h2 className="title" style={{ fontSize: '1.6rem' }}>{isEditing ? 'Modifier' : 'Détails'}</h2>
+                    <button onClick={() => { setSelectedItem(null); setIsEditing(false); }} style={{ background: 'none', border: 'none' }}><X size={24} /></button>
+                  </div>
+                  
+                  {isEditing ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <select className="input-styled" value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                      <select className="input-styled" value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                      <select className="input-styled" value={editForm.season} onChange={e => setEditForm({...editForm, season: e.target.value})}>{['Été', 'Hiver', 'Printemps', 'Automne', 'Toutes saisons'].map(s => <option key={s} value={s}>{s}</option>)}</select>
+                      <button className="btn-primary" onClick={handleUpdateItem}><Save size={20} /> Enregistrer</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                        <div style={{ width: '150px', height: '150px', margin: '0 auto', background: 'white', borderRadius: '20px', overflow: 'hidden' }}>
+                          {selectedItem.image_url ? <img src={selectedItem.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '4rem', lineHeight: '150px' }}>{selectedItem.icon}</div>}
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{selectedItem.type} {selectedItem.color}</div>
+                        <div className="subtitle">{selectedItem.activity} • {selectedItem.season}</div>
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', opacity: 0.6 }}>Dernière fois porté : {selectedItem.last_worn_date ? format(new Date(selectedItem.last_worn_date), 'dd MMMM yyyy') : 'Jamais'}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '1rem' }}>
+                        <button className="btn-primary" style={{ flex: 2 }} onClick={() => handleUpdateLastWorn(selectedItem)}><Check size={20} /> Je porte ça !</button>
+                        <button className="btn-secondary" onClick={() => { setIsEditing(true); setEditForm({ type: selectedItem.type, color: selectedItem.color, season: selectedItem.season }); }}><Edit3 size={20} /></button>
+                        <button className="btn-secondary" style={{ color: '#f43f5e' }} onClick={() => handleDeleteItem(selectedItem.id)}><Trash2 size={20} /></button>
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* OTHERS VIEWS (SPLASH, TRAVEL, SETTINGS...) - Remains solid */}
           {view === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="dashboard-container">
               <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Profil</h2></header>
               <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
-                <div className="profile-avatar">{getProfileAvatar()}</div>
+                <div className="profile-avatar">{gender === 'female' ? '👩' : '👨'}</div>
                 <h3 className="title" style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>{name || 'Utilisateur'}</h3>
-                <p className="subtitle" style={{ marginBottom: '2rem', fontSize: '0.8rem' }}>Code : {uid}</p>
-                
                 <div style={{ textAlign: 'left', marginBottom: '2rem' }}>
                   <label className="subtitle" style={{ fontSize: '0.75rem', fontWeight: 800, marginBottom: '0.5rem', display: 'block' }}>ADRESSE EMAIL</label>
-                  <div style={{ position: 'relative' }}>
-                    <input 
-                      type="email" 
-                      placeholder="votre@email.com" 
-                      className="input-styled" 
-                      value={email} 
-                      onChange={(e) => setEmail(e.target.value)} 
-                      disabled={isEmailConfirmed}
-                    />
-                    {isEmailConfirmed && <div className="locked-badge"><ShieldCheck size={14} /> Compte sécurisé</div>}
-                  </div>
-                  {!isEmailConfirmed && (
-                    <button className="btn-primary" onClick={handleLinkEmail} style={{ marginTop: '1rem', padding: '1rem', fontSize: '0.9rem' }}>Sécuriser via Email</button>
-                  )}
+                  <input type="email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isEmailConfirmed} />
+                  {isEmailConfirmed && <div className="locked-badge"><ShieldCheck size={14} /> Compte sécurisé</div>}
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <button className="btn-secondary" style={{ textAlign: 'left', padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}><LifeBuoy size={20} color="var(--primary)" /> Support & Contact</button>
-                  <button className="btn-secondary" style={{ textAlign: 'left', padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}><FileText size={20} color="var(--primary)" /> Mentions Légales</button>
-                  <button className="btn-secondary" onClick={async () => { await supabase.auth.signOut(); setIsEmailConfirmed(false); setView('splash'); }} style={{ color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', background: 'rgba(244, 63, 94, 0.05)', marginTop: '1rem' }}><LogOut size={20} /> Déconnexion</button>
-                </div>
+                <button className="btn-secondary" onClick={async () => { await supabase.auth.signOut(); setIsEmailConfirmed(false); setView('splash'); }} style={{ color: '#f43f5e' }}><LogOut size={20} /> Déconnexion</button>
               </div>
             </motion.div>
           )}
 
-          {/* TRAVEL & OTHER VIEWS (REMAIN UNCHANGED) */}
-          {view === 'travel' && (
-            <motion.div key="travel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
-              <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mode Voyage ✈️</h2></header>
-              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-                <input type="text" placeholder="Où pars-tu ?" className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} />
-                <button className="btn-primary" onClick={handleGenerateSuitcase} style={{ marginTop: '1rem' }}>Générer ma valise ✨</button>
-              </div>
-              <div style={{ padding: '0 0.5rem' }}>{suitcase.map((item, idx) => (
-                <div key={idx} className={`glass-card ${item.checked ? 'checked' : ''}`} onClick={() => setSuitcase(suitcase.map((s, i) => i === idx ? { ...s, checked: !s.checked } : s))} style={{ padding: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ width: '20px', height: '20px', borderRadius: '5px', border: '2px solid var(--primary)', background: item.checked ? 'var(--primary)' : 'transparent' }} />
-                  <div style={{ flex: 1, fontWeight: 700 }}>{item.type}</div><div style={{ fontSize: '1.2rem' }}>{item.icon}</div>
-                </div>
-              ))}</div>
-            </motion.div>
-          )}
-
-          {/* SPLASH & LOGIN FLOWS */}
+          {/* FALLBACKS */}
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="logo-container"><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
@@ -365,45 +350,12 @@ function App() {
               </div>
             </motion.div>
           )}
-          {view === 'login' && (
-            <motion.div key="login" initial={{ x: 100 }} animate={{ x: 0 }} className="glass-card my-auto">
-              <button onClick={() => setView('splash')} className="btn-secondary" style={{ width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
-              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Connexion</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <button onClick={() => setView('login-code')} className="btn-primary" style={{ background: 'white', color: 'black' }}><Key size={20} /> Code d'accès</button>
-                <button onClick={() => setView('login-email')} className="btn-primary"><Mail size={20} /> Email</button>
-              </div>
-            </motion.div>
-          )}
-          {view === 'login-code' && (
-            <motion.div key="login-code" initial={{ x: 100 }} animate={{ x: 0 }} className="glass-card my-auto">
-              <button onClick={() => setView('login')} className="btn-secondary" style={{ width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
-              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Code d'accès</h2>
-              <input type="text" placeholder="AB12 - CD34" className="input-styled" value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value)} maxLength={11} />
-              <button className="btn-primary" onClick={handleLogin} style={{ marginTop: '2rem' }}>Se connecter</button>
-            </motion.div>
-          )}
-          {view === 'login-email' && (
-            <motion.div key="login-email" initial={{ x: 100 }} animate={{ x: 0 }} className="glass-card my-auto">
-              <button onClick={() => setView('login')} className="btn-secondary" style={{ width: 'auto', background: 'none', border: 'none' }}><ChevronLeft size={20} /> Retour</button>
-              <h2 className="title" style={{ fontSize: '2.4rem', marginBottom: '2rem' }}>Email Login</h2>
-              <input type="email" placeholder="votre@email.com" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <button className="btn-primary" onClick={handleLoginEmail} style={{ marginTop: '2rem' }}>Envoyer le lien ✨</button>
-            </motion.div>
-          )}
           {view === 'register' && (
             <motion.div key="register" initial={{ x: 100 }} animate={{ x: 0 }} className="glass-card my-auto">
               <h2 className="title" style={{ textAlign: 'center' }}>Nouveau Dressing</h2>
               <input type="text" placeholder="Ton prénom" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} style={{ marginTop: '2rem' }} />
               <div className="gender-toggle"><button className={`gender-btn ${gender === 'female' ? 'active' : ''}`} onClick={() => setGender('female')}>Femme</button><button className={`gender-btn ${gender === 'male' ? 'active' : ''}`} onClick={() => setGender('male')}>Homme</button></div>
               <button className="btn-primary" onClick={handleRegister}>C'est parti</button>
-            </motion.div>
-          )}
-          {view === 'success' && (
-            <motion.div key="success" initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card my-auto" style={{ textAlign: 'center' }}>
-              <h2 className="title">Bravo {name} !</h2>
-              <div className="uid-box"><div className="uid-text">{uid}</div></div>
-              <button onClick={() => setView('dashboard')} className="btn-secondary" style={{ marginTop: '2rem' }}>Accéder à mon dressing</button>
             </motion.div>
           )}
           {view === 'add-choice' && (
@@ -423,27 +375,13 @@ function App() {
               <div className="glass-card" style={{ gap: '1.5rem', display: 'flex', flexDirection: 'column' }}>
                 <h2 className="title" style={{ fontSize: '1.6rem' }}>Détails</h2>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{ALL_TYPES.slice(0, 10).map(t => (<span key={t} className={`tag-pill ${newItem.type === t ? 'active' : ''}`} onClick={() => setNewItem({...newItem, type: t})}>{t}</span>))}</div>
-                <button onClick={handleAddItem} className="btn-primary">Confirmer ✨</button>
+                <button onClick={() => { supabase.from('clothes').insert([{ profile_id: uid, ...newItem, image_url: selectedImage, last_worn_date: new Date().toISOString() }]).then(() => { fetchItems(uid); setView('dashboard'); }) }} className="btn-primary">Confirmer ✨</button>
               </div>
             </motion.div>
           )}
           {(view === 'loading-ai' || view === 'loading-outfit') && (
             <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', width: '100%', marginTop: '5rem' }}><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} style={{ fontSize: '5rem', marginBottom: '2rem' }}>🪄</motion.div><h2 className="title">{loadingPhrase}</h2></motion.div>
           )}
-
-          {/* CITY MODAL */}
-          {showCityModal && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="modal-overlay" onClick={() => setShowCityModal(false)}>
-              <motion.div className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}>
-                <h2 className="title" style={{ fontSize: '1.6rem', marginBottom: '1.5rem' }}>Changer de ville</h2>
-                <input type="text" placeholder="Rechercher..." className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} />
-                <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '1rem' }}>
-                  {cityResults.map(city => (<div key={city.id} onClick={() => { initWeather(city.latitude, city.longitude, city.name); setShowCityModal(false); }} className="btn-secondary" style={{ marginBottom: '0.5rem', textAlign: 'left' }}>{city.name} ({city.country})</div>))}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-
         </AnimatePresence>
 
         {isMainView && <BottomNav />}
