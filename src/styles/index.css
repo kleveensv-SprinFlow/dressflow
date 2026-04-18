@@ -378,27 +378,77 @@ body {
   border: 4px solid white;
 }
 
-.tag-pill {
-  padding: 0.6rem 1.2rem;
-  border-radius: 50px;
-  background: #f3f4f6;
-  font-size: 0.9rem;
-  font-weight: 600;
+/* --- Step 9: Filters & Travel --- */
+.filter-bar {
+  display: flex;
+  gap: 0.8rem;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.filter-pill {
+  white-space: nowrap;
+  padding: 0.7rem 1.4rem;
+  border-radius: 20px;
+  background: white;
+  border: 1px solid var(--glass-border);
+  font-size: 0.85rem;
+  font-weight: 700;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+}
+
+.filter-pill.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  box-shadow: 0 8px 20px var(--primary-glow);
+  transform: translateY(-2px);
+}
+
+.weather-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--primary);
+  color: white;
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px var(--primary-glow);
+}
+
+.glass-card.checked {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.tag-pill {
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  background: #f1f5f9;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
 }
 
 .tag-pill.active {
   background: var(--primary);
   color: white;
+  border-color: var(--primary);
 }
 
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.3);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: flex-end;
   z-index: 2000;
@@ -406,6 +456,7 @@ body {
 
 .modal-content {
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: white;
   max-height: 90vh;
   width: 100%;
 }
