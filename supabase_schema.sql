@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   gender TEXT,
   email TEXT UNIQUE,
   avatar_url TEXT, -- NOUVEAU : Photo de profil
+  subscription_tier TEXT DEFAULT 'free', -- 'free' or 'premium'
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

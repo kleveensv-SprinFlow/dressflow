@@ -128,6 +128,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [inputCode, setInputCode] = useState('')
   const [loginMode, setLoginMode] = useState('code')
+  const [subscriptionTier, setSubscriptionTier] = useState('free') // 'free' or 'premium'
   
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
@@ -223,6 +224,7 @@ function App() {
     const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).single()
     if (profile) {
       setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email); setAvatarUrl(profile.avatar_url);
+      setSubscriptionTier(profile.subscription_tier || 'free');
       await fetchItems(profile.id); if (['splash', 'login', 'register', 'complete-profile'].includes(view)) setView('dashboard');
     }
   }
@@ -261,6 +263,7 @@ function App() {
 
   const handleGenerateOutfitRequest = async () => {
     if (items.length < 3) { alert("Ajoute plus d'habits !"); return; }
+    if (subscriptionTier === 'free') { setView('subscription'); return; }
     setOutfitLoading(true); setStylistMode('ai'); try { const result = await generateOutfit(items, weather || await getLocalWeather()); setCurrentOutfit(result); setView('outfit-result') } catch (err) { alert("Erreur") } finally { setOutfitLoading(false) }
   }
 
@@ -301,7 +304,7 @@ function App() {
     setLoading(true); setError(null); try {
       if (loginMode === 'code') {
         const cleanCode = inputCode.replace(/[^A-Z0-9]/g, ''); const { data: profile } = await supabase.from('profiles').select('*').eq('id', cleanCode).single()
-        if (!profile) throw new Error("Code invalide"); setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); setAvatarUrl(profile.avatar_url); await fetchItems(profile.id); setView('dashboard')
+        if (!profile) throw new Error("Code invalide"); setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); setAvatarUrl(profile.avatar_url); setSubscriptionTier(profile.subscription_tier || 'free'); await fetchItems(profile.id); setView('dashboard')
       } else { const { data, error: authErr } = await supabase.auth.signInWithPassword({ email, password }); if (authErr) throw authErr; await syncProfile(email); }
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -312,7 +315,9 @@ function App() {
   }
 
   const handleAddItem = async () => {
-    if (!uid || !tempFile) return; setLoading(true)
+    if (!uid || !tempFile) return; 
+    if (subscriptionTier === 'free' && items.length >= 25) { alert("Limite de 25 vêtements atteinte. Passez à Premium pour un dressing illimité ! ✨"); setView('subscription'); return; }
+    setLoading(true)
     try {
       const fileName = `${uid}-${Date.now()}.jpg`; await supabase.storage.from('clothes-images').upload(fileName, tempFile)
       const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
@@ -326,6 +331,7 @@ function App() {
     if (!email || !password || password !== confirmPassword) { alert("Mots de passe !"); return; }
     setLoading(true); try {
       const { data: authData, error: authErr } = await supabase.auth.signUp({ email, password }); if (authErr) throw authErr
+      alert("Vérifie tes mails ! 📧 Un lien de confirmation t'a été envoyé.");
       let finalAvatarUrl = avatarUrl; if (tempAvatarFile) { const fileName = `avatar-${uid}-${Date.now()}.jpg`; await supabase.storage.from('avatars').upload(fileName, tempAvatarFile); const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName); finalAvatarUrl = publicUrl; }
       await supabase.from('profiles').update({ email, user_id: authData.user.id, avatar_url: finalAvatarUrl }).eq('id', uid); setIsEmailConfirmed(true); setAvatarUrl(finalAvatarUrl); setView('dashboard')
     } catch (err) { alert(err.message) } finally { setLoading(false) }
@@ -353,11 +359,11 @@ function App() {
       <div className={`nav-item ${view === 'travel' ? 'active' : ''}`} onClick={() => setView('travel')}><Plane size={22} /><span>Voyage</span></div>
       <div className="nav-item" onClick={() => setView('add-choice')}><div className="add-nav-btn"><Plus size={30} /></div><span>Ajouter</span></div>
       <div className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => setView('outfit-result')}><Wand2 size={22} /><span>Styliste</span></div>
-      <div className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}><User size={22} /><span>Profil</span></div>
+      <div className={`nav-item ${['settings', 'subscription'].includes(view) ? 'active' : ''}`} onClick={() => setView('settings')}><User size={22} /><span>Profil</span></div>
     </div>
   )
 
-  const isMainView = ['dashboard', 'outfit-result', 'settings', 'travel'].includes(view)
+  const isMainView = ['dashboard', 'outfit-result', 'settings', 'travel', 'subscription'].includes(view)
 
   return (
     <div id="root">
@@ -478,6 +484,160 @@ function App() {
             </motion.div>
           )}
 
+          {view === 'add-choice' && (
+            <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '2rem', height: '100%' }}>
+              <header><h2 className="title" style={{ textAlign: 'center' }}>Ajouter un vêtement</h2><p className="subtitle" style={{ textAlign: 'center' }}>Comment voulez-vous procéder ?</p></header>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div className="glass-card" onClick={() => fileInputRef.current.click()} style={{ padding: '2rem', textAlign: 'center', cursor: 'pointer', border: '2px dashed var(--primary)' }}>
+                  <div style={{ background: 'var(--primary)', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}><Camera size={30} /></div>
+                  <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>Prendre une photo</div>
+                </div>
+                <div className="glass-card" onClick={() => fileInputRef.current.click()} style={{ padding: '2rem', textAlign: 'center', cursor: 'pointer' }}>
+                  <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}><ImageIcon size={30} /></div>
+                  <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>Choisir une image</div>
+                </div>
+                <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileChange} />
+              </div>
+              <button className="btn-secondary" onClick={() => setView('dashboard')}>Annuler</button>
+            </motion.div>
+          )}
+
+          {view === 'loading-ai' && (
+            <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem' }}>
+              <div className="ai-loader-container">
+                <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 2 }} style={{ width: '100px', height: '100px', background: 'var(--primary)', borderRadius: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                  <Sparkles size={50} />
+                </motion.div>
+                <div className="ai-pulse-ring"></div>
+              </div>
+              <h2 className="title" style={{ marginTop: '2rem' }}>Analyse par l'IA...</h2>
+              <p className="subtitle">Dressflow identifie votre vêtement pour vous simplifier la vie.</p>
+            </motion.div>
+          )}
+
+          {view === 'add-detail' && (
+            <motion.div key="add-detail" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="dashboard-container" style={{ width: '100%' }}>
+              <header style={{ marginBottom: '2rem' }}><h2 className="title">Presque fini ! ✨</h2></header>
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+                <div style={{ width: '100%', height: '200px', borderRadius: '20px', overflow: 'hidden', background: 'white', marginBottom: '1.5rem' }}>
+                  <img src={selectedImage} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Preview" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE DE VÊTEMENT</label><select className="input-styled" value={newItem.type} onChange={(e) => setNewItem({...newItem, type: e.target.value, icon: getIconForType(e.target.value)})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                  <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR DOMINANTE</label><select className="input-styled" value={newItem.color} onChange={(e) => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ flex: 1 }}><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISON</label><select className="input-styled" value={newItem.season} onChange={(e) => setNewItem({...newItem, season: e.target.value})}>{ALL_SEASONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                    <div style={{ flex: 1 }}><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉ</label><select className="input-styled" value={newItem.activity} onChange={(e) => setNewItem({...newItem, activity: e.target.value})}>{ALL_ACTIVITIES.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', paddingBottom: '2rem' }}>
+                <button className="btn-primary" style={{ flex: 2 }} onClick={handleAddItem} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Ajouter au dressing ✨"}</button>
+                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setView('dashboard')}>Annuler</button>
+              </div>
+            </motion.div>
+          )}
+
+          {view === 'settings' && (
+            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
+              <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.4rem' }}>Mon Profil</h2></header>
+              
+              <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', marginBottom: '2rem', position: 'relative' }}>
+                <div onClick={() => avatarInputRef.current.click()} style={{ width: '100px', height: '100px', borderRadius: '35px', background: 'var(--primary)', margin: '0 auto 1.5rem', overflow: 'hidden', cursor: 'pointer', border: '4px solid white', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                  {avatarPreview || avatarUrl ? <img src={avatarPreview || avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><UserCircle size={50} /></div>}
+                  <div style={{ position: 'absolute', bottom: '110px', right: '50%', transform: 'translateX(50px)', background: 'var(--primary)', color: 'white', padding: '5px', borderRadius: '10px', border: '2px solid white' }}><Camera size={14} /></div>
+                </div>
+                <input type="file" ref={avatarInputRef} hidden accept="image/*" onChange={handleAvatarChange} />
+                <h3 className="title" style={{ fontSize: '1.6rem', margin: 0 }}>{name || "Utilisateur"}</h3>
+                <p className="subtitle" style={{ fontSize: '0.9rem' }}>{email || "Compte local"}</p>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5, marginBottom: '0.5rem' }}>MON CODE DRESSFLOW</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(0,0,0,0.03)', padding: '1rem', borderRadius: '15px' }}>
+                  <div style={{ flex: 1, fontWeight: 900, fontSize: '1.2rem', color: 'var(--primary)', letterSpacing: '2px' }}>{formatUID(uid)}</div>
+                  <button className="btn-secondary" style={{ padding: '8px' }} onClick={() => { navigator.clipboard.writeText(uid); alert("Code copié !"); }}><Copy size={18} /></button>
+                </div>
+                <p className="subtitle" style={{ fontSize: '0.75rem', marginTop: '1rem' }}>Partage ce code pour synchroniser ton dressing sur un autre appareil.</p>
+              </div>
+
+              {!isEmailConfirmed && (
+                <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', border: '2px solid var(--primary)', background: 'rgba(var(--primary-rgb), 0.05)' }}>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}><ShieldAlert color="var(--primary)" size={24} /><div><div style={{ fontWeight: 800 }}>Sécuriser mon compte</div><p className="subtitle" style={{ fontSize: '0.8rem', margin: '5px 0 1rem' }}>Ajoute un email pour ne jamais perdre ton dressing.</p><button className="btn-primary" style={{ height: '40px', fontSize: '0.8rem' }} onClick={() => setView('complete-profile')}>Configurer</button></div></div>
+                </div>
+              )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', paddingBottom: '5rem' }}>
+        <button className="btn-secondary" style={{ justifyContent: 'space-between', opacity: isEmailConfirmed ? 1 : 0.8 }} onClick={() => setView('subscription')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><ShoppingBag size={18} /><span>Abonnement</span></div>
+          {!isEmailConfirmed ? (
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--primary)' }}>Voir les offres ✨</span>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 800, background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '8px' }}>{subscriptionTier.toUpperCase()}</span>
+              <ChevronRight size={18} opacity={0.3} />
+            </div>
+          )}
+        </button>
+        <button className="btn-secondary" style={{ justifyContent: 'space-between' }} onClick={() => setGender(gender === 'female' ? 'male' : 'female')}><span>Style: {gender === 'female' ? 'Femme 👩' : 'Homme 👨'}</span><ChevronRight size={18} opacity={0.3} /></button>
+                <button className="btn-secondary" style={{ justifyContent: 'space-between', color: '#f43f5e' }} onClick={handleLogout}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><LogOut size={18} /><span>Déconnexion</span></div></button>
+              </div>
+            </motion.div>
+          )}
+
+          {view === 'complete-profile' && (
+            <motion.div key="complete-profile" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
+              <h2 className="title" style={{ textAlign: 'center' }}>Sécuriser mon compte 🛡️</h2>
+              <p className="subtitle" style={{ textAlign: 'center', marginBottom: '2rem' }}>Créez vos identifiants pour accéder à votre dressing partout.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+        <input type="email" placeholder="Email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input type="password" placeholder="Mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input type="password" placeholder="Confirmer" className="input-styled" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+        <button className="btn-primary" onClick={handleCompleteProfile} disabled={loading}>Lier mon dressing ✨</button>
+        <button className="btn-secondary" style={{ border: 'none', background: 'none' }} onClick={() => setView('settings')}>Retour</button>
+      </div>
+            </motion.div>
+          )}
+
+          {view === 'subscription' && (
+            <motion.div key="subscription" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="dashboard-container" style={{ width: '100%' }}>
+              <header style={{ marginBottom: '2rem' }}><h2 className="title" style={{ fontSize: '2.4rem' }}>Abonnement</h2></header>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '5rem' }}>
+                
+                {!isEmailConfirmed && (
+                  <div className="glass-card" style={{ padding: '1.2rem', border: '1px solid var(--primary)', background: 'rgba(var(--primary-rgb), 0.05)', textAlign: 'center' }}>
+                    <p style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)' }}>Liez votre compte pour débloquer ces offres ! 🛡️</p>
+                    <button className="btn-primary" style={{ height: '40px', fontSize: '0.8rem', marginTop: '10px' }} onClick={() => setView('complete-profile')}>Lier mon dressing</button>
+                  </div>
+                )}
+
+                <div className={`glass-card ${subscriptionTier === 'free' ? 'active-tier' : ''}`} style={{ padding: '1.5rem', border: subscriptionTier === 'free' ? '2px solid var(--primary)' : '1px solid var(--glass-border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}><h3 style={{ fontWeight: 900 }}>Gratuit</h3>{subscriptionTier === 'free' && <span className="tag-pill active">Actuel</span>}</div>
+                  <ul style={{ listStyle: 'none', padding: 0, fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={14} color="#10b981" /> Jusqu'à 25 vêtements</li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><X size={14} color="#f43f5e" /> Pas de génération de tenue IA</li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={14} color="#10b981" /> Analyse IA individuelle</li>
+                  </ul>
+                </div>
+
+                <div className={`glass-card ${subscriptionTier === 'premium' ? 'active-tier' : ''}`} style={{ padding: '1.5rem', border: '2px solid var(--primary)', background: 'rgba(var(--primary-rgb), 0.03)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}><h3 style={{ fontWeight: 900 }}>Premium ✨</h3>{subscriptionTier === 'premium' && <span className="tag-pill active">Actuel</span>}</div>
+                  <ul style={{ listStyle: 'none', padding: 0, fontSize: '0.85rem', color: 'var(--text-main)', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1.5rem' }}>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={14} color="#10b981" /> Dressing illimité</li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={14} color="#10b981" /> Génération de tenues par IA</li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={14} color="#10b981" /> Conseils personnalisés</li>
+                  </ul>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button className="btn-primary" style={{ flex: 1, height: 'auto', padding: '1rem', flexDirection: 'column', gap: '2px' }} onClick={() => { if (!isEmailConfirmed) { alert("Liez votre compte pour activer Premium !"); setView('complete-profile'); } else { setSubscriptionTier('premium'); alert("Passage à Premium ! (Simulé)"); } }} disabled={subscriptionTier === 'premium'}><strong>2.99€</strong><span style={{ fontSize: '0.6rem', opacity: 0.8 }}>Mensuel</span></button>
+                    <button className="btn-primary" style={{ flex: 1, height: 'auto', padding: '1rem', flexDirection: 'column', gap: '2px' }} onClick={() => { if (!isEmailConfirmed) { alert("Liez votre compte pour activer Premium !"); setView('complete-profile'); } else { setSubscriptionTier('premium'); alert("Passage à Premium ! (Simulé)"); } }} disabled={subscriptionTier === 'premium'}><strong>19.99€</strong><span style={{ fontSize: '0.6rem', opacity: 0.8 }}>Annuel</span></button>
+                  </div>
+                </div>
+                <button className="btn-secondary" onClick={() => setView('settings')}>Retour</button>
+              </div>
+            </motion.div>
+          )}
+
+
         </AnimatePresence>
 
         {isMainView && <BottomNav />}
@@ -512,9 +672,27 @@ function App() {
         </AnimatePresence>
 
         {showCityModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="modal-overlay" onClick={() => setShowCityModal(false)}>
-            <motion.div className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}><h2 className="title">Ville</h2><input type="text" className="input-styled" value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} /><div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '1rem' }}>{cityResults.map(city => (<div key={city.id} onClick={() => handleSelectCity(city)} className="btn-secondary" style={{ marginBottom: '0.5rem' }}>{city.name}</div>))}</div></motion.div>
-          </motion.div>
+          <div className="modal-overlay" onClick={() => setShowCityModal(false)}>
+            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem 2rem', borderRadius: '40px 40px 0 0', width: '100%', height: 'auto', maxHeight: '80vh', overflowY: 'auto' }}>
+              <div className="modal-handle"></div>
+              <h2 className="title" style={{ marginBottom: '1.5rem' }}>Choisir une ville</h2>
+              <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                <Search style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', opacity: 0.3 }} size={20} />
+                <input type="text" className="input-styled" style={{ paddingLeft: '3rem' }} placeholder="Ex: Paris, Lyon..." value={citySearch} onChange={(e) => handleCitySearch(e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                {cityResults.length > 0 ? cityResults.map(city => (
+                  <div key={city.id} onClick={() => handleSelectCity(city)} className="btn-secondary" style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.03)', border: 'none' }}>
+                    <div>
+                      <div style={{ fontWeight: 800 }}>{city.name}</div>
+                      <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{city.admin1}, {city.country}</div>
+                    </div>
+                    <ChevronRight size={18} opacity={0.3} />
+                  </div>
+                )) : citySearch.length > 2 && <p className="subtitle" style={{ textAlign: 'center', padding: '2rem' }}>Aucune ville trouvée... 🔍</p>}
+              </div>
+            </motion.div>
+          </div>
         )}
 
       </div>
