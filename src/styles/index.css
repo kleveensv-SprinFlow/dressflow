@@ -607,6 +607,63 @@ body {
   box-shadow: 0 5px 15px rgba(0,0,0,0.05);
 }
 
+.badge-fire {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: white;
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  font-size: 0.8rem;
+}
+
+.lock-btn {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0,0,0,0.05);
+  border-radius: 12px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lock-btn.locked {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.progress-container {
+  height: 6px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s ease-out;
+}
+
+.suitcase-item {
+  transition: all 0.3s;
+}
+
+.suitcase-item.checked {
+  opacity: 0.5;
+  text-decoration: line-through;
+  transform: scale(0.98);
+}
+
 .slider-category {
   margin-bottom: 2rem;
 }

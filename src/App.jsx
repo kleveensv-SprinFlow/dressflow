@@ -7,7 +7,7 @@ import {
   Settings, Mail, ShieldCheck, LogOut, AlertCircle,
   Thermometer, CloudRain, Wind, Wand2, RefreshCw,
   Calendar, Trash2, Heart, ShoppingBag, Home, User,
-  LifeBuoy, FileText, ShieldAlert, Key, Lock, Search,
+  LifeBuoy, FileText, ShieldAlert, Key, Lock, Unlock, Search,
   MapPin, Luggage, Plane, ListChecks, ChevronRight,
   UserCircle, Edit3, Save, Info, MapPinned, History,
   Eye, EyeOff, UploadCloud, Dices, Layers, MessageCircle,
@@ -94,6 +94,21 @@ const RotatingClothes = () => {
   )
 }
 
+const SlotMachine = () => {
+  const icons = ['👕', '👖', '👗', '🧥', '👟', '👜', '👚', '🩳', '🧢']
+  return (
+    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', height: '80px', overflow: 'hidden' }}>
+      {[0, 1, 2].map(i => (
+        <div key={i} style={{ width: '60px', background: 'white', borderRadius: '15px', border: '1px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+          <motion.div animate={{ y: [0, -400] }} transition={{ repeat: Infinity, duration: 0.5 + i * 0.2, ease: "linear" }} style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '10px 0', alignItems: 'center' }}>
+            {icons.concat(icons).map((icon, idx) => <span key={idx} style={{ fontSize: '2rem' }}>{icon}</span>)}
+          </motion.div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const CategorySlider = ({ title, items, selectedId, onSelect }) => {
   if (items.length === 0) return null
   return (
@@ -131,6 +146,8 @@ function App() {
   const [subscriptionTier, setSubscriptionTier] = useState('free') // 'free' or 'premium'
   const [aiGensRemaining, setAiGensRemaining] = useState(5)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [lockedOutfit, setLockedOutfit] = useState({ top: null, bottom: null, layer: null })
+  const [suitcaseChecked, setSuitcaseChecked] = useState([])
   
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
@@ -276,7 +293,7 @@ function App() {
     if (subscriptionTier === 'free' && aiGensRemaining <= 0) { setView('subscription'); return; }
     setOutfitLoading(true); setStylistMode('ai'); 
     try { 
-      const result = await generateOutfit(items, weather || await getLocalWeather()); 
+      const result = await generateOutfit(items, weather || await getLocalWeather(), lockedOutfit); 
       setCurrentOutfit(result); setView('outfit-result');
       if (subscriptionTier === 'free') setAiGensRemaining(prev => prev - 1);
     } catch (err) { alert("Erreur") } finally { setOutfitLoading(false) }
@@ -370,11 +387,11 @@ function App() {
 
   const BottomNav = () => (
     <div className="bottom-nav">
-      <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}><Home size={22} /><span>Dressing</span></div>
-      <div className={`nav-item ${view === 'travel' ? 'active' : ''}`} onClick={() => setView('travel')}><Plane size={22} /><span>Voyage</span></div>
-      <div className="nav-item" onClick={() => setView('add-choice')}><div className="add-nav-btn"><Plus size={30} /></div><span>Ajouter</span></div>
-      <div className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => setView('outfit-result')}><Wand2 size={22} /><span>Styliste</span></div>
-      <div className={`nav-item ${['settings', 'subscription'].includes(view) ? 'active' : ''}`} onClick={() => setView('settings')}><User size={22} /><span>Profil</span></div>
+      <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}><Home size={22} /><span>Dressing</span></motion.div>
+      <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${view === 'travel' ? 'active' : ''}`} onClick={() => setView('travel')}><Plane size={22} /><span>Voyage</span></motion.div>
+      <motion.div whileTap={{ scale: 0.9 }} className="nav-item" onClick={() => setView('add-choice')}><div className="add-nav-btn"><Plus size={30} /></div><span>Ajouter</span></motion.div>
+      <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${view === 'outfit-result' ? 'active' : ''}`} onClick={() => setView('outfit-result')}><Wand2 size={22} /><span>Styliste</span></motion.div>
+      <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${['settings', 'subscription'].includes(view) ? 'active' : ''}`} onClick={() => setView('settings')}><User size={22} /><span>Profil</span></motion.div>
     </div>
   )
 
@@ -390,7 +407,7 @@ function App() {
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
               <div className="logo-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
-              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}><button onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</button><button onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</button></div>
+              <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}><motion.button whileTap={{ scale: 0.95 }} onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</motion.button><motion.button whileTap={{ scale: 0.95 }} onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</motion.button></div>
             </motion.div>
           )}
 
@@ -432,8 +449,17 @@ function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><div style={{ background: 'var(--primary)', color: 'white', padding: '12px', borderRadius: '18px' }}><Sun size={24} /></div><div><div style={{ fontWeight: 900, fontSize: '1.4rem' }}>{weather ? `${weather.temp}°C` : '--°C'}</div><div className="subtitle" style={{ fontSize: '0.85rem' }}>{weather ? weather.description : 'Clique pour localiser'}</div></div></div><ChevronRight size={20} style={{ opacity: 0.3 }} /></div>
                 )}
               </div>
-              <div className="filter-bar">{['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'].map(f => (<button key={f} className={`filter-pill ${activeFilter === f ? 'active' : ''}`} onClick={() => setActiveFilter(f)}>{f}</button>))}</div>
-              <LayoutGroup><motion.div layout className="item-grid"><AnimatePresence>{filteredItems.map(item => (<motion.div key={item.id} layout initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} whileTap={{ scale: 0.95 }} className="item-card" onClick={() => setSelectedItem(item)}><div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}</div><div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.color}</div></div></motion.div>))}</AnimatePresence></motion.div></LayoutGroup>
+              <div className="filter-bar">{['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'].map(f => (<motion.button whileTap={{ scale: 0.9 }} key={f} className={`filter-pill ${activeFilter === f ? 'active' : ''}`} onClick={() => setActiveFilter(f)}>{f}</motion.button>))}</div>
+              <LayoutGroup><motion.div layout className="item-grid"><AnimatePresence mode="popLayout">{filteredItems.map(item => {
+                const isFavorite = differenceInDays(new Date(), new Date(item.last_worn_date)) < 7;
+                return (
+                  <motion.div key={item.id} layout initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} whileTap={{ scale: 0.95 }} className="item-card" onClick={() => setSelectedItem(item)}>
+                    {isFavorite && <div className="badge-fire"><Sparkles size={12} color="#f59e0b" /></div>}
+                    <div className="item-image">{item.image_url ? <img src={item.image_url} alt={item.type} /> : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}</div>
+                    <div className="item-info"><div className="item-type">{item.type}</div><div className="item-meta">{item.color}</div></div>
+                  </motion.div>
+                )
+              })}</AnimatePresence></motion.div></LayoutGroup>
             </motion.div>
           )}
 
@@ -459,25 +485,33 @@ function App() {
                   </div>
                 </div>
 
-                <button className="btn-primary" onClick={handleGenerateSuitcase} disabled={suitcaseLoading} style={{ marginTop: '1.5rem', height: '60px', borderRadius: '20px' }}>
-                  {suitcaseLoading ? <Loader2 className="animate-spin" /> : <><Sparkles size={20} /> Générer ma valise ✨</>}
-                </button>
-              </div>
-
-              {suitcase.length > 0 && (
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}><SuitcaseIcon size={22} color="var(--primary)" /><h3 className="title" style={{ margin: 0, fontSize: '1.4rem' }}>Ma Valise Idéale</h3></div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
-                    {suitcase.map((pack, idx) => (
-                      <div key={idx} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem' }}>
-                        <div style={{ fontSize: '2rem' }}>{pack.icon}</div>
-                        <div style={{ flex: 1 }}><div style={{ fontSize: '0.7rem', fontWeight: 800, opacity: 0.5 }}>{pack.category.toUpperCase()}</div><div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{pack.type}</div></div>
-                        <div style={{ background: 'var(--primary)', color: 'white', padding: '6px 14px', borderRadius: '12px', fontWeight: 900 }}>x{pack.qty}</div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
+                  <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" onClick={handleGenerateSuitcase} disabled={suitcaseLoading} style={{ marginTop: '1.5rem', height: '60px', borderRadius: '20px' }}>
+                    {suitcaseLoading ? <Loader2 className="animate-spin" /> : <><Sparkles size={20} /> Générer ma valise ✨</>}
+                  </motion.button>
+                </div>
+  
+                {suitcase.length > 0 && (
+                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><SuitcaseIcon size={22} color="var(--primary)" /><h3 className="title" style={{ margin: 0, fontSize: '1.4rem' }}>Ma Valise Idéale</h3></div>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 900, color: 'var(--primary)' }}>{Math.round((suitcaseChecked.length / suitcase.length) * 100)}% prêt</span>
+                    </div>
+                    <div className="progress-container"><div className="progress-bar-fill" style={{ width: `${(suitcaseChecked.length / suitcase.length) * 100}%` }}></div></div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem', marginTop: '1.5rem' }}>
+                      {suitcase.map((pack, idx) => {
+                        const isChecked = suitcaseChecked.includes(idx);
+                        return (
+                          <motion.div key={idx} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 300 }} className={`glass-card suitcase-item ${isChecked ? 'checked' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', cursor: 'pointer' }} onClick={() => setSuitcaseChecked(prev => isChecked ? prev.filter(i => i !== idx) : [...prev, idx])}>
+                            <div style={{ fontSize: '2rem' }}>{pack.icon}</div>
+                            <div style={{ flex: 1 }}><div style={{ fontSize: '0.7rem', fontWeight: 800, opacity: 0.5 }}>{pack.category.toUpperCase()}</div><div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{pack.type}</div></div>
+                            <div style={{ background: isChecked ? '#10b981' : 'var(--primary)', color: 'white', padding: '6px 14px', borderRadius: '12px', fontWeight: 900, transition: 'all 0.3s' }}>{isChecked ? <Check size={16} /> : `x${pack.qty}`}</div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  </motion.div>
+                )}
             </motion.div>
           )}
 
@@ -486,15 +520,49 @@ function App() {
             <motion.div key="outfit-result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
               <header style={{ marginBottom: '1.5rem' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Mon Studio 🎨</h2><div className="filter-bar" style={{ marginTop: '1rem' }}><button className={`filter-pill ${stylistMode === 'ai' ? 'active' : ''}`} onClick={() => setStylistMode('ai')}><Sparkles size={14} /> IA ✨</button><button className={`filter-pill ${stylistMode === 'manual' ? 'active' : ''}`} onClick={() => setStylistMode('manual')}><Dices size={14} /> Mélangeur 🎮</button></div></header>
               {stylistMode === 'ai' ? (
-                <div style={{ marginTop: '1rem' }}>{outfitLoading ? (<div style={{ textAlign: 'center', padding: '4rem' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" style={{ margin: '0 auto 1.5rem' }} /><p className="subtitle">L'IA prépare ton look...</p></div>) : currentOutfit ? (
+                <div style={{ marginTop: '1rem' }}>{outfitLoading ? (
+                  <div style={{ textAlign: 'center', padding: '4rem' }}>
+                    <SlotMachine />
+                    <Loader2 className="animate-spin" size={30} color="var(--primary)" style={{ margin: '2rem auto 1rem' }} />
+                    <p className="subtitle">L'IA mélange ton dressing...</p>
+                  </div>
+                ) : currentOutfit ? (
                   <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-                    <p className="subtitle" style={{ fontSize: '1rem', lineHeight: '1.4', marginBottom: '1.5rem' }}>{currentOutfit.explanation}</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>{[currentOutfit.top_id, currentOutfit.bottom_id, currentOutfit.layer_id].filter(id => id).map(id => { const item = findItemById(id); return item ? (<div key={id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1rem' }}><div style={{ width: '60px', height: '60px', borderRadius: '12px', background: 'white', overflow: 'hidden' }}>{item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '2rem', textAlign: 'center', lineHeight: '60px' }}>{item.icon}</div>}</div><div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: '1rem' }}>{item.type}</div><div className="subtitle" style={{ fontSize: '0.8rem' }}>{item.color}</div></div></div>) : null })}</div>
-                    <button className="btn-primary" onClick={handleValidateOutfit} disabled={loading}><Check size={20} /> Je porte cette tenue !</button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <p className="subtitle" style={{ fontSize: '0.9rem', lineHeight: '1.4', margin: 0, flex: 1 }}>{currentOutfit.explanation}</p>
+                      <motion.button whileTap={{ scale: 0.9 }} className="btn-secondary" style={{ padding: '8px', border: 'none' }} onClick={handleGenerateOutfitRequest}><RefreshCw size={20} color="var(--primary)" /></motion.button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+                      {[
+                        { id: currentOutfit.top_id, type: 'top' },
+                        { id: currentOutfit.bottom_id, type: 'bottom' },
+                        { id: currentOutfit.layer_id, type: 'layer' }
+                      ].filter(o => o.id).map(o => {
+                        const item = findItemById(o.id);
+                        const isLocked = lockedOutfit[o.type] === o.id;
+                        return item ? (
+                          <div key={o.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1rem' }}>
+                            <div style={{ width: '60px', height: '60px', borderRadius: '12px', background: 'white', overflow: 'hidden' }}>
+                              {item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '2rem', textAlign: 'center', lineHeight: '60px' }}>{item.icon}</div>}
+                            </div>
+                            <div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: '1rem' }}>{item.type}</div><div className="subtitle" style={{ fontSize: '0.8rem' }}>{item.color}</div></div>
+                            <motion.button whileTap={{ scale: 0.9 }} className={`lock-btn ${isLocked ? 'locked' : ''}`} onClick={() => setLockedOutfit(prev => ({ ...prev, [o.type]: isLocked ? null : o.id }))}>
+                              {isLocked ? <Lock size={18} /> : <Unlock size={18} opacity={0.3} />}
+                            </motion.button>
+                          </div>
+                        ) : null
+                      })}
+                    </div>
+                    <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" onClick={handleValidateOutfit} disabled={loading}><Check size={20} /> Je porte cette tenue !</motion.button>
                   </motion.div>
-                ) : (<div style={{ textAlign: 'center', padding: '4rem' }}><button className="btn-primary" onClick={handleGenerateOutfitRequest}>Générer une tenue IA ✨</button></div>)}</div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '4rem' }}>
+                    <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>🎰</div>
+                    <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" onClick={handleGenerateOutfitRequest}>Faire tourner la machine ✨</motion.button>
+                  </div>
+                )}</div>
               ) : (
-                <div style={{ marginTop: '1rem', paddingBottom: '4rem' }}><CategorySlider title="Tête" items={manualItems.head} selectedId={manualOutfit.head} onSelect={(id) => setManualOutfit({...manualOutfit, head: id})} /><CategorySlider title="Haut" items={manualItems.top} selectedId={manualOutfit.top} onSelect={(id) => setManualOutfit({...manualOutfit, top: id})} /><CategorySlider title="Couche" items={manualItems.layer} selectedId={manualOutfit.layer} onSelect={(id) => setManualOutfit({...manualOutfit, layer: id})} /><CategorySlider title="Bas" items={manualItems.bottom} selectedId={manualOutfit.bottom} onSelect={(id) => setManualOutfit({...manualOutfit, bottom: id})} /><CategorySlider title="Pieds" items={manualItems.feet} selectedId={manualOutfit.feet} onSelect={(id) => setManualOutfit({...manualOutfit, feet: id})} /><CategorySlider title="Sac" items={manualItems.bag} selectedId={manualOutfit.bag} onSelect={(id) => setManualOutfit({...manualOutfit, bag: id})} /><div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 100 }}><button className="btn-primary" onClick={handleValidateOutfit} disabled={loading}><Check size={20} /> Valider ce look ! ✨</button></div></div>
+                <div style={{ marginTop: '1rem', paddingBottom: '4rem' }}><CategorySlider title="Tête" items={manualItems.head} selectedId={manualOutfit.head} onSelect={(id) => setManualOutfit({...manualOutfit, head: id})} /><CategorySlider title="Haut" items={manualItems.top} selectedId={manualOutfit.top} onSelect={(id) => setManualOutfit({...manualOutfit, top: id})} /><CategorySlider title="Couche" items={manualItems.layer} selectedId={manualOutfit.layer} onSelect={(id) => setManualOutfit({...manualOutfit, layer: id})} /><CategorySlider title="Bas" items={manualItems.bottom} selectedId={manualOutfit.bottom} onSelect={(id) => setManualOutfit({...manualOutfit, bottom: id})} /><CategorySlider title="Pieds" items={manualItems.feet} selectedId={manualOutfit.feet} onSelect={(id) => setManualOutfit({...manualOutfit, feet: id})} /><CategorySlider title="Sac" items={manualItems.bag} selectedId={manualOutfit.bag} onSelect={(id) => setManualOutfit({...manualOutfit, bag: id})} /><div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 100 }}><motion.button whileTap={{ scale: 0.95 }} className="btn-primary" onClick={handleValidateOutfit} disabled={loading}><Check size={20} /> Valider ce look ! ✨</motion.button></div></div>
               )}
             </motion.div>
           )}
@@ -503,17 +571,17 @@ function App() {
             <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '2rem', height: '100%' }}>
               <header><h2 className="title" style={{ textAlign: 'center' }}>Ajouter un vêtement</h2><p className="subtitle" style={{ textAlign: 'center' }}>Comment voulez-vous procéder ?</p></header>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div className="glass-card" onClick={() => fileInputRef.current.click()} style={{ padding: '2rem', textAlign: 'center', cursor: 'pointer', border: '2px dashed var(--primary)' }}>
+                <motion.div whileTap={{ scale: 0.98 }} className="glass-card" onClick={() => fileInputRef.current.click()} style={{ padding: '2rem', textAlign: 'center', cursor: 'pointer', border: '2px dashed var(--primary)' }}>
                   <div style={{ background: 'var(--primary)', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}><Camera size={30} /></div>
                   <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>Prendre une photo</div>
-                </div>
-                <div className="glass-card" onClick={() => fileInputRef.current.click()} style={{ padding: '2rem', textAlign: 'center', cursor: 'pointer' }}>
+                </motion.div>
+                <motion.div whileTap={{ scale: 0.98 }} className="glass-card" onClick={() => fileInputRef.current.click()} style={{ padding: '2rem', textAlign: 'center', cursor: 'pointer' }}>
                   <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}><ImageIcon size={30} /></div>
                   <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>Choisir une image</div>
-                </div>
+                </motion.div>
                 <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileChange} />
               </div>
-              <button className="btn-secondary" onClick={() => setView('dashboard')}>Annuler</button>
+              <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" onClick={() => setView('dashboard')}>Annuler</motion.button>
             </motion.div>
           )}
 
@@ -547,8 +615,8 @@ function App() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '1rem', paddingBottom: '2rem' }}>
-                <button className="btn-primary" style={{ flex: 2 }} onClick={handleAddItem} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Ajouter au dressing ✨"}</button>
-                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setView('dashboard')}>Annuler</button>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 2 }} onClick={handleAddItem} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Ajouter au dressing ✨"}</motion.button>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => setView('dashboard')}>Annuler</motion.button>
               </div>
             </motion.div>
           )}
@@ -611,8 +679,8 @@ function App() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <button className="btn-secondary" style={{ justifyContent: 'space-between' }} onClick={() => setView('subscription')}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><ShoppingBag size={18} /><span>Abonnement</span></div><ChevronRight size={18} opacity={0.3} /></button>
-                <button className="btn-secondary" style={{ justifyContent: 'space-between', color: '#f43f5e' }} onClick={handleLogout}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><LogOut size={18} /><span>Déconnexion</span></div></button>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ justifyContent: 'space-between' }} onClick={() => setView('subscription')}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><ShoppingBag size={18} /><span>Abonnement</span></div><ChevronRight size={18} opacity={0.3} /></motion.button>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ justifyContent: 'space-between', color: '#f43f5e' }} onClick={handleLogout}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><LogOut size={18} /><span>Déconnexion</span></div></motion.button>
               </div>
 
               <div className="danger-zone">
@@ -631,8 +699,8 @@ function App() {
         <input type="email" placeholder="Email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input type="password" placeholder="Mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} />
         <input type="password" placeholder="Confirmer" className="input-styled" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-        <button className="btn-primary" onClick={handleCompleteProfile} disabled={loading}>Lier mon dressing ✨</button>
-        <button className="btn-secondary" style={{ border: 'none', background: 'none' }} onClick={() => setView('settings')}>Retour</button>
+        <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" onClick={handleCompleteProfile} disabled={loading}>Lier mon dressing ✨</motion.button>
+        <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ border: 'none', background: 'none' }} onClick={() => setView('settings')}>Retour</motion.button>
       </div>
             </motion.div>
           )}
@@ -666,11 +734,11 @@ function App() {
                     <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={14} color="#10b981" /> Conseils personnalisés</li>
                   </ul>
                   <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button className="btn-primary" style={{ flex: 1, height: 'auto', padding: '1rem', flexDirection: 'column', gap: '2px' }} onClick={() => { if (!isEmailConfirmed) { alert("Liez votre compte pour activer Premium !"); setView('complete-profile'); } else { setSubscriptionTier('premium'); alert("Passage à Premium ! (Simulé)"); } }} disabled={subscriptionTier === 'premium'}><strong>2.99€</strong><span style={{ fontSize: '0.6rem', opacity: 0.8 }}>Mensuel</span></button>
-                    <button className="btn-primary" style={{ flex: 1, height: 'auto', padding: '1rem', flexDirection: 'column', gap: '2px' }} onClick={() => { if (!isEmailConfirmed) { alert("Liez votre compte pour activer Premium !"); setView('complete-profile'); } else { setSubscriptionTier('premium'); alert("Passage à Premium ! (Simulé)"); } }} disabled={subscriptionTier === 'premium'}><strong>19.99€</strong><span style={{ fontSize: '0.6rem', opacity: 0.8 }}>Annuel</span></button>
+                    <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1, height: 'auto', padding: '1rem', flexDirection: 'column', gap: '2px' }} onClick={() => { if (!isEmailConfirmed) { alert("Liez votre compte pour activer Premium !"); setView('complete-profile'); } else { setSubscriptionTier('premium'); alert("Passage à Premium ! (Simulé)"); } }} disabled={subscriptionTier === 'premium'}><strong>2.99€</strong><span style={{ fontSize: '0.6rem', opacity: 0.8 }}>Mensuel</span></motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1, height: 'auto', padding: '1rem', flexDirection: 'column', gap: '2px' }} onClick={() => { if (!isEmailConfirmed) { alert("Liez votre compte pour activer Premium !"); setView('complete-profile'); } else { setSubscriptionTier('premium'); alert("Passage à Premium ! (Simulé)"); } }} disabled={subscriptionTier === 'premium'}><strong>19.99€</strong><span style={{ fontSize: '0.6rem', opacity: 0.8 }}>Annuel</span></motion.button>
                   </div>
                 </div>
-                <button className="btn-secondary" onClick={() => setView('settings')}>Retour</button>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" onClick={() => setView('settings')}>Retour</motion.button>
               </div>
             </motion.div>
           )}
@@ -697,11 +765,25 @@ function App() {
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', marginBottom: '1.5rem' }}><div style={{ width: '80px', height: '80px', background: 'white', borderRadius: '20px', overflow: 'hidden' }}>{selectedItem.image_url ? <img src={selectedItem.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '3rem', textAlign: 'center', lineHeight: '80px' }}>{selectedItem.icon}</div>}</div><div><h2 className="title" style={{ fontSize: '1.6rem' }}>{selectedItem.type}</h2><p className="subtitle">{selectedItem.color} • {selectedItem.season}</p></div></div>
-                    <div className="glass-card" style={{ background: 'rgba(var(--primary-rgb), 0.05)', border: 'none', padding: '1.2rem', marginBottom: '1.5rem' }}><p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{getFunnyStats(selectedItem)}</p></div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}><div className="glass-card" style={{ padding: '0.8rem', textAlign: 'center' }}><div style={{ fontSize: '0.6rem', opacity: 0.5 }}>SAISON</div><div style={{ fontWeight: 800 }}>{selectedItem.season}</div></div><div className="glass-card" style={{ padding: '0.8rem', textAlign: 'center' }}><div style={{ fontSize: '0.6rem', opacity: 0.5 }}>ACTIVITÉ</div><div style={{ fontWeight: 800 }}>{selectedItem.activity}</div></div></div>
-                    <button className="btn-primary" onClick={() => handleUpdateLastWorn(selectedItem)} style={{ width: '100%', height: '60px' }}><Sparkles size={20} /> Je le porte !</button>
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}><button className="btn-secondary" style={{ flex: 1 }} onClick={() => { setIsEditing(true); setEditForm({...selectedItem}); }}><Edit3 size={18} /> Modifier</button><button className="btn-secondary" style={{ flex: 1, color: '#f43f5e' }} onClick={() => handleDeleteItem(selectedItem.id)}><Trash2 size={18} /></button></div>
+                    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+                      <div style={{ width: '80px', height: '80px', background: 'white', borderRadius: '20px', overflow: 'hidden' }}>
+                        {selectedItem.image_url ? <img src={selectedItem.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ fontSize: '3rem', textAlign: 'center', lineHeight: '80px' }}>{selectedItem.icon}</div>}
+                      </div>
+                      <div><h2 className="title" style={{ fontSize: '1.6rem' }}>{selectedItem.type}</h2><p className="subtitle">{selectedItem.color} • {selectedItem.season}</p></div>
+                    </div>
+                    <div className="glass-card" style={{ background: 'rgba(var(--primary-rgb), 0.05)', border: 'none', padding: '1.2rem', marginBottom: '1.5rem' }}>
+                      <p style={{ fontSize: '0.9rem', fontWeight: 700 }}>{getFunnyStats(selectedItem)}</p>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+                      <div className="glass-card" style={{ padding: '0.8rem', textAlign: 'center' }}><div style={{ fontSize: '0.6rem', opacity: 0.5 }}>SAISON</div><div style={{ fontWeight: 800 }}>{selectedItem.season}</div></div>
+                      <div className="glass-card" style={{ padding: '0.8rem', textAlign: 'center' }}><div style={{ fontSize: '0.6rem', opacity: 0.5 }}>ACTIVITÉ</div><div style={{ fontWeight: 800 }}>{selectedItem.activity}</div></div>
+                    </div>
+                    <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" onClick={() => handleUpdateLastWorn(selectedItem)} style={{ width: '100%', height: '60px' }}><Sparkles size={20} /> Je le porte !</motion.button>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                      <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => { setIsEditing(true); setEditForm({...selectedItem}); }}><Edit3 size={18} /> Modifier</motion.button>
+                      <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1, color: '#f43f5e' }} onClick={() => handleDeleteItem(selectedItem.id)}><Trash2 size={18} /></motion.button>
+                    </div>
+                  </>
                   </>
                 )}
               </motion.div>

@@ -104,22 +104,22 @@ const getSeasonFromType = (type) => {
 }
 
 // On garde l'autre fonction pour la compatibilité mais on peut la simplifier
-export const generateOutfit = async (items, weather) => {
+export const generateOutfit = async (items, weather, lockedIds = {}) => {
   // On utilise une logique interne simple pour rester gratuit
   const temp = weather.temp
   
-  const tops = items.filter(i => ['T-shirt', 'Pull', 'Chemise', 'Hoodie', 'Robe'].includes(i.type))
-  const bottoms = items.filter(i => ['Jean', 'Pantalon', 'Short', 'Jupe'].includes(i.type))
-  const layers = items.filter(i => ['Veste', 'Manteau', 'Cardigan'].includes(i.type))
+  const tops = items.filter(i => ['T-shirt', 'Pull', 'Chemise', 'Hoodie', 'Robe', 'Top', 'Blouse'].includes(i.type))
+  const bottoms = items.filter(i => ['Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino'].includes(i.type))
+  const layers = items.filter(i => ['Veste', 'Manteau', 'Cardigan', 'Blazer', 'Parka', 'Trench'].includes(i.type))
   
-  const top = tops[Math.floor(Math.random() * tops.length)]
-  const bottom = bottoms[Math.floor(Math.random() * bottoms.length)]
-  const layer = temp < 18 ? layers[Math.floor(Math.random() * layers.length)] : null
+  const top = lockedIds.top ? items.find(i => i.id === lockedIds.top) : tops[Math.floor(Math.random() * tops.length)]
+  const bottom = lockedIds.bottom ? items.find(i => i.id === lockedIds.bottom) : bottoms[Math.floor(Math.random() * bottoms.length)]
+  const layer = lockedIds.layer ? items.find(i => i.id === lockedIds.layer) : (temp < 18 ? layers[Math.floor(Math.random() * layers.length)] : null)
   
   return {
     top_id: top?.id,
     bottom_id: bottom?.id,
     layer_id: layer?.id,
-    explanation: `Il fait ${temp}°C. Voici une tenue adaptée à ton dressing !`
+    explanation: `Il fait ${temp}°C. Voici une tenue ${lockedIds.top || lockedIds.bottom || lockedIds.layer ? 'personnalisée' : 'adaptée'} à ton dressing !`
   }
 }
