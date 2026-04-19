@@ -266,7 +266,7 @@ function App() {
   const ALL_ACTIVITIES = ['Quotidien', 'Sport', 'Soirée', 'Travail']
   const ALL_SEASONS = ['Été', 'Hiver', 'Printemps', 'Automne']
 
-  const [newItem, setNewItem] = useState({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
+  const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
   const [tempFile, setTempFile] = useState(null)
 
@@ -491,7 +491,7 @@ function App() {
     if (files.length === 1) {
       setTempFile(files[0])
       setSelectedImage(URL.createObjectURL(files[0]))
-      setNewItem({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
+      setNewItem({ main_category: null, type: '', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
       setView('add-detail')
     } else {
       const initialBulk = files.map(f => ({
@@ -853,14 +853,16 @@ function App() {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <section>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Layers size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Catégorie</label></div>
-                  <ChoiceSelector options={MAIN_CATEGORIES} selected={newItem.main_category} onSelect={(val) => setNewItem({...newItem, main_category: val, type: CATEGORY_HIERARCHY[val][0]})} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Layers size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>1. Catégorie</label></div>
+                  <ChoiceSelector options={MAIN_CATEGORIES} selected={newItem.main_category} onSelect={(val) => setNewItem({...newItem, main_category: val, type: ''})} />
                 </section>
 
-                <section>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Tag size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Type de vêtement</label></div>
-                  <SearchSelector options={CATEGORY_HIERARCHY[newItem.main_category] || []} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} placeholder="Rechercher ou créer un type..." />
-                </section>
+                {newItem.main_category && (
+                  <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Tag size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>2. Type de {newItem.main_category.toLowerCase()}</label></div>
+                    <SearchSelector options={CATEGORY_HIERARCHY[newItem.main_category] || []} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} placeholder={`Ex: ${CATEGORY_HIERARCHY[newItem.main_category][0]}...`} />
+                  </motion.section>
+                )}
 
                 <section>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Palette size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Couleur</label></div>
