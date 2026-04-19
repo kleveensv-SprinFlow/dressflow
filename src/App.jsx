@@ -207,6 +207,34 @@ function App() {
     })
   }, [items, activeFilter])
 
+  const generateRandomUID = () => { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let res = ''; for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res }
+  const getIconForType = (type) => { const icons = { 'T-shirt': '👕', 'Hoodie': '🧥', 'Pantalon': '👖', 'Jean': '👖', 'Robe': '👗', 'Veste': '🧥', 'Basket': '👟', 'Sac': '👜', 'Short': '🩳' }; return icons[type] || '✨' }
+
+  const fetchItems = async (profileId) => {
+    setLoading(true); const { data } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
+    setItems(data || []); setLoading(false)
+  }
+
+  const syncProfile = async (userEmail) => {
+    const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).single()
+    if (profile) {
+      setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email); setAvatarUrl(profile.avatar_url);
+      setSubscriptionTier(profile.subscription_tier || 'free');
+      localStorage.setItem('dressflow_uid', profile.id); // Persistance locale
+      await fetchItems(profile.id); if (['splash', 'login', 'register', 'complete-profile', 'success'].includes(view)) setView('dashboard');
+    }
+  }
+
+  const checkUserSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.email) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
+  }
+
+  const initWeather = async (lat = null, lon = null, cityName = null) => {
+    setWeatherLoading(true); setWeatherError(null)
+    try { const data = await getLocalWeather(lat, lon); if (cityName) data.city = cityName; setWeather(data) } catch (err) { setWeatherError("Position introuvable.") } finally { setWeatherLoading(false) }
+  }
+
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
   
   useEffect(() => {
@@ -228,43 +256,20 @@ function App() {
     // Restauration de la session invité (Code)
     const savedUid = localStorage.getItem('dressflow_uid')
     if (savedUid && !uid) {
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', savedUid).single()
-      if (profile) {
-        setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || '');
-        setSubscriptionTier(profile.subscription_tier || 'free'); setAvatarUrl(profile.avatar_url);
-        await fetchItems(profile.id); setView('dashboard');
-      }
+      (async () => {
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', savedUid).single()
+        if (profile) {
+          setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || '');
+          setSubscriptionTier(profile.subscription_tier || 'free'); setAvatarUrl(profile.avatar_url);
+          await fetchItems(profile.id); setView('dashboard');
+        }
+      })()
     }
 
     return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => { if (['dashboard', 'outfit-result', 'settings', 'travel'].includes(view)) { if (!weather && !weatherLoading) initWeather(); checkForForgottenItems(); } }, [view, items])
-
-  const initWeather = async (lat = null, lon = null, cityName = null) => {
-    setWeatherLoading(true); setWeatherError(null)
-    try { const data = await getLocalWeather(lat, lon); if (cityName) data.city = cityName; setWeather(data) } catch (err) { setWeatherError("Position introuvable.") } finally { setWeatherLoading(false) }
-  }
-
-  const checkUserSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user?.email) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
-  }
-
-  const syncProfile = async (userEmail) => {
-    const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).single()
-    if (profile) {
-      setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email); setAvatarUrl(profile.avatar_url);
-      setSubscriptionTier(profile.subscription_tier || 'free');
-      localStorage.setItem('dressflow_uid', profile.id); // Persistance locale
-      await fetchItems(profile.id); if (['splash', 'login', 'register', 'complete-profile', 'success'].includes(view)) setView('dashboard');
-    }
-  }
-
-  const fetchItems = async (profileId) => {
-    setLoading(true); const { data } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
-    setItems(data || []); setLoading(false)
-  }
 
   const handleLogout = async () => {
     if (!window.confirm("Voulez-vous vraiment vous déconnecter ?")) return
@@ -404,8 +409,6 @@ function App() {
     } catch (err) { alert(err.message) } finally { setLoading(false) }
   }
 
-  const getIconForType = (type) => { const icons = { 'T-shirt': '👕', 'Hoodie': '🧥', 'Pantalon': '👖', 'Jean': '👖', 'Robe': '👗', 'Veste': '🧥', 'Basket': '👟', 'Sac': '👜', 'Short': '🩳' }; return icons[type] || '✨' }
-  const generateRandomUID = () => { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let res = ''; for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res }
   const formatUID = (val) => { const cleaned = val.replace(/[^A-Z0-9]/g, '').slice(0, 8); if (cleaned.length > 4) return `${cleaned.slice(0, 4)} - ${cleaned.slice(4)}`; return cleaned }
   const checkForForgottenItems = () => { const sixtyDaysAgo = new Date(); sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60); const forgotten = items.filter(item => new Date(item.last_worn_date || item.created_at) < sixtyDaysAgo); setForgottenItems(forgotten.slice(0, 5)) }
   const findItemById = (id) => items.find(item => item.id === id)
