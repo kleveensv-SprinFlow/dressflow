@@ -109,6 +109,34 @@ const SlotMachine = () => {
   )
 }
 
+const ChoiceSelector = ({ options, selected, onSelect, getIcon }) => (
+  <div className="choice-grid">
+    {options.map(opt => (
+      <motion.div key={opt} whileTap={{ scale: 0.95 }} className={`choice-item ${selected === opt ? 'active' : ''}`} onClick={() => onSelect(opt)}>
+        <span>{getIcon ? getIcon(opt) : '✨'}</span>
+        <label>{opt}</label>
+      </motion.div>
+    ))}
+  </div>
+)
+
+const ColorPalette = ({ selected, onSelect }) => {
+  const colors = [
+    { name: 'Blanc', hex: '#FFFFFF' }, { name: 'Noir', hex: '#000000' }, { name: 'Gris', hex: '#94a3b8' }, 
+    { name: 'Beige', hex: '#f5f5dc' }, { name: 'Marine', hex: '#1e3a8a' }, { name: 'Bleu Ciel', hex: '#bae6fd' },
+    { name: 'Kaki', hex: '#4b5320' }, { name: 'Vert Sapin', hex: '#064e3b' }, { name: 'Bordeaux', hex: '#7f1d1d' },
+    { name: 'Rouge', hex: '#ef4444' }, { name: 'Rose Poudré', hex: '#fce7f3' }, { name: 'Moutarde', hex: '#eab308' },
+    { name: 'Marron', hex: '#78350f' }, { name: 'Camel', hex: '#b45309' }, { name: 'Violet', hex: '#7c3aed' }
+  ]
+  return (
+    <div className="color-palette">
+      {colors.map(c => (
+        <motion.div key={c.name} whileTap={{ scale: 1.1 }} className={`color-circle ${selected === c.name ? 'active' : ''}`} style={{ background: c.hex }} onClick={() => onSelect(c.name)} title={c.name} />
+      ))}
+    </div>
+  )
+}
+
 const CategorySlider = ({ title, items, selectedId, onSelect }) => {
   if (items.length === 0) return null
   return (
@@ -177,6 +205,9 @@ function App() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState(null)
+
+  const [bulkFiles, setBulkFiles] = useState([])
+  const [bulkItems, setBulkItems] = useState([])
 
   const [tempAvatarFile, setTempAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(null)
@@ -369,21 +400,51 @@ function App() {
   }
 
   const handleFileChange = async (e) => {
-    const file = e.target.files[0]
-    if (file) { 
-      setLoading(true); 
-      try { 
-        // Suppression de l'IA lente (analyzeClothing) sur demande utilisateur
-        setNewItem({ ...newItem, icon: getIconForType(newItem.type) }); 
-        setTempFile(file); 
-        setSelectedImage(URL.createObjectURL(file)); 
-        setView('add-detail') 
-      } catch (err) { 
-        setView('add-detail') 
-      } finally { 
-        setLoading(false) 
-      } 
+    const files = Array.from(e.target.files)
+    if (files.length === 0) return
+    
+    setLoading(true)
+    if (files.length === 1) {
+      setTempFile(files[0])
+      setSelectedImage(URL.createObjectURL(files[0]))
+      setNewItem({ ...newItem, type: 'T-shirt', icon: '👕' })
+      setView('add-detail')
+    } else {
+      const initialBulk = files.map(f => ({
+        file: f,
+        preview: URL.createObjectURL(f),
+        type: 'T-shirt',
+        color: 'Blanc',
+        season: 'Toutes saisons',
+        activity: 'Quotidien',
+        icon: '👕'
+      }))
+      setBulkItems(initialBulk)
+      setView('bulk-add')
     }
+    setLoading(false)
+  }
+
+  const handleBulkAdd = async () => {
+    setLoading(true)
+    try {
+      for (const item of bulkItems) {
+        const fileName = `${uid}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}.jpg`
+        await supabase.storage.from('clothes-images').upload(fileName, item.file)
+        const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
+        await supabase.from('clothes').insert([{ 
+          profile_id: uid, 
+          type: item.type, 
+          color: item.color, 
+          season: item.season, 
+          activity: item.activity, 
+          icon: item.icon, 
+          image_url: publicUrl, 
+          last_worn_date: new Date().toISOString() 
+        }])
+      }
+      await fetchItems(uid); setView('dashboard'); setBulkItems([]);
+    } catch (err) { alert(err.message) } finally { setLoading(false) }
   }
 
   const handleAddItem = async () => {
@@ -615,11 +676,43 @@ function App() {
                 </motion.div>
                 <motion.div whileTap={{ scale: 0.98 }} className="glass-card" onClick={() => fileInputRef.current.click()} style={{ padding: '2rem', textAlign: 'center', cursor: 'pointer' }}>
                   <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}><ImageIcon size={30} /></div>
-                  <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>Choisir une image</div>
+                  <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>Choisir depuis la galerie</div>
+                  <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '5px' }}>Sélection multiple possible</p>
                 </motion.div>
-                <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileChange} />
+                <input type="file" ref={fileInputRef} hidden accept="image/*" multiple onChange={handleFileChange} />
               </div>
               <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" onClick={() => setView('dashboard')}>Annuler</motion.button>
+            </motion.div>
+          )}
+
+          {view === 'bulk-add' && (
+            <motion.div key="bulk-add" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
+              <header style={{ marginBottom: '1.5rem' }}><h2 className="title">Ajout groupé 📦</h2><p className="subtitle">{bulkItems.length} vêtements sélectionnés</p></header>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '140px' }}>
+                {bulkItems.map((item, idx) => (
+                  <div key={idx} className="glass-card" style={{ padding: '1.2rem' }}>
+                    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                      <div style={{ width: '80px', height: '80px', borderRadius: '15px', overflow: 'hidden', background: 'white', border: '1px solid rgba(0,0,0,0.05)' }}><img src={item.preview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
+                      <div style={{ flex: 1 }}>
+                        <label className="subtitle" style={{ fontSize: '0.6rem', fontWeight: 800, marginBottom: '5px', display: 'block' }}>TYPE DE VÊTEMENT</label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                          {['T-shirt', 'Pantalon', 'Robe', 'Veste', 'Basket'].map(t => (
+                            <button key={t} onClick={() => {
+                              const newBulk = [...bulkItems];
+                              newBulk[idx] = { ...newBulk[idx], type: t, icon: getIconForType(t) };
+                              setBulkItems(newBulk);
+                            }} className={`filter-pill ${item.type === t ? 'active' : ''}`} style={{ fontSize: '0.65rem', padding: '4px 10px' }}>{t}</button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 100, background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', padding: '15px', borderRadius: '25px', display: 'flex', gap: '1rem', boxShadow: '0 -10px 25px rgba(0,0,0,0.05)' }}>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 2 }} onClick={handleBulkAdd} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : `Enregistrer (${bulkItems.length}) ✨`}</motion.button>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => setView('dashboard')}>Annuler</motion.button>
+              </div>
             </motion.div>
           )}
 
@@ -643,13 +736,11 @@ function App() {
                 <div style={{ width: '100%', height: '200px', borderRadius: '20px', overflow: 'hidden', background: 'white', marginBottom: '1.5rem' }}>
                   <img src={selectedImage} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Preview" />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE DE VÊTEMENT</label><select className="input-styled" value={newItem.type} onChange={(e) => setNewItem({...newItem, type: e.target.value, icon: getIconForType(e.target.value)})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                  <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR DOMINANTE</label><select className="input-styled" value={newItem.color} onChange={(e) => setNewItem({...newItem, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                  <div style={{ display: 'flex', gap: '1rem' }}>
-                    <div style={{ flex: 1 }}><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISON</label><select className="input-styled" value={newItem.season} onChange={(e) => setNewItem({...newItem, season: e.target.value})}>{ALL_SEASONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                    <div style={{ flex: 1 }}><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉ</label><select className="input-styled" value={newItem.activity} onChange={(e) => setNewItem({...newItem, activity: e.target.value})}>{ALL_ACTIVITIES.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '2rem' }}>
+                  <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-main)', padding: '10px 0' }}><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE DE VÊTEMENT</label><ChoiceSelector options={ALL_TYPES} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} getIcon={getIconForType} /></div>
+                  <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR</label><ColorPalette selected={newItem.color} onSelect={(val) => setNewItem({...newItem, color: val})} /></div>
+                  <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISON</label><ChoiceSelector options={ALL_SEASONS} selected={newItem.season} onSelect={(val) => setNewItem({...newItem, season: val})} getIcon={() => '☀️'} /></div>
+                  <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉ</label><ChoiceSelector options={ALL_ACTIVITIES} selected={newItem.activity} onSelect={(val) => setNewItem({...newItem, activity: val})} getIcon={() => '🏷️'} /></div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '1rem', paddingBottom: '2rem' }}>
@@ -793,13 +884,13 @@ function App() {
               <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="glass-card modal-content" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem 2rem', borderRadius: '40px 40px 0 0', width: '100%', height: 'auto', maxHeight: '90vh', overflowY: 'auto' }}>
                 <div style={{ width: '40px', height: '4px', background: 'rgba(0,0,0,0.1)', borderRadius: '2px', margin: '-1rem auto 1.5rem' }}></div>
                 {isEditing ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                    <h2 className="title">Modifier</h2>
-                    <select className="input-styled" value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})}>{ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                    <select className="input-styled" value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})}>{ALL_COLORS.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                    <select className="input-styled" value={editForm.season} onChange={e => setEditForm({...editForm, season: e.target.value})}>{ALL_SEASONS.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                    <select className="input-styled" value={editForm.activity} onChange={e => setEditForm({...editForm, activity: e.target.value})}>{ALL_ACTIVITIES.map(a => <option key={a} value={a}>{a}</option>)}</select>
-                    <div style={{ display: 'flex', gap: '1rem' }}><button className="btn-primary" style={{ flex: 1 }} onClick={handleUpdateItem}>Sauver</button><button className="btn-secondary" style={{ flex: 1 }} onClick={() => setIsEditing(false)}>Annuler</button></div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '2rem' }}>
+                    <h2 className="title">Modifier le vêtement</h2>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE</label><ChoiceSelector options={ALL_TYPES} selected={editForm.type} onSelect={(val) => setEditForm({...editForm, type: val, icon: getIconForType(val)})} getIcon={getIconForType} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR</label><ColorPalette selected={editForm.color} onSelect={(val) => setEditForm({...editForm, color: val})} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISON</label><ChoiceSelector options={ALL_SEASONS} selected={editForm.season} onSelect={(val) => setEditForm({...editForm, season: val})} getIcon={() => '☀️'} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉ</label><ChoiceSelector options={ALL_ACTIVITIES} selected={editForm.activity} onSelect={(val) => setEditForm({...editForm, activity: val})} getIcon={() => '🏷️'} /></div>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}><motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1 }} onClick={handleUpdateItem}>Sauvegarder ✨</motion.button><motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => setIsEditing(false)}>Annuler</motion.button></div>
                   </div>
                 ) : (
                   <>
