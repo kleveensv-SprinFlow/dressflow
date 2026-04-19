@@ -224,6 +224,18 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
     })
+    
+    // Restauration de la session invité (Code)
+    const savedUid = localStorage.getItem('dressflow_uid')
+    if (savedUid && !uid) {
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', savedUid).single()
+      if (profile) {
+        setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || '');
+        setSubscriptionTier(profile.subscription_tier || 'free'); setAvatarUrl(profile.avatar_url);
+        await fetchItems(profile.id); setView('dashboard');
+      }
+    }
+
     return () => subscription.unsubscribe()
   }, [])
 
@@ -244,7 +256,8 @@ function App() {
     if (profile) {
       setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email); setAvatarUrl(profile.avatar_url);
       setSubscriptionTier(profile.subscription_tier || 'free');
-      await fetchItems(profile.id); if (['splash', 'login', 'register', 'complete-profile'].includes(view)) setView('dashboard');
+      localStorage.setItem('dressflow_uid', profile.id); // Persistance locale
+      await fetchItems(profile.id); if (['splash', 'login', 'register', 'complete-profile', 'success'].includes(view)) setView('dashboard');
     }
   }
 
@@ -256,10 +269,12 @@ function App() {
   const handleLogout = async () => {
     if (!window.confirm("Voulez-vous vraiment vous déconnecter ?")) return
     setLoading(true); try {
-      await supabase.auth.signOut(); setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setAvatarUrl(null);
+      await supabase.auth.signOut(); 
+      localStorage.removeItem('dressflow_uid'); localStorage.removeItem('suitcase'); localStorage.removeItem('travelData');
+      setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setAvatarUrl(null);
       setSuitcase([]); setCurrentOutfit(null); setForgottenItems([]); setWeather(null); 
       setTravelData({ destination: '', lat: null, lon: null, startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd') });
-      localStorage.removeItem('suitcase'); localStorage.removeItem('travelData'); setView('splash')
+      setView('splash')
     } catch (err) { alert("Erreur") } finally { setLoading(false) }
   }
   
@@ -329,21 +344,41 @@ function App() {
 
   const handleRegister = async () => {
     if (!name) { alert("Prénom requis !"); return; }
-    setLoading(true); try { const newUid = generateRandomUID(); await supabase.from('profiles').insert([{ id: newUid, name, gender }]); setUid(newUid); setView('success') } catch (err) { alert(err.message) } finally { setLoading(false) }
+    setLoading(true); try { 
+      const newUid = generateRandomUID(); 
+      await supabase.from('profiles').insert([{ id: newUid, name, gender }]); 
+      setUid(newUid); localStorage.setItem('dressflow_uid', newUid); setView('success') 
+    } catch (err) { alert(err.message) } finally { setLoading(false) }
   }
 
   const handleLogin = async () => {
     setLoading(true); setError(null); try {
       if (loginMode === 'code') {
         const cleanCode = inputCode.replace(/[^A-Z0-9]/g, ''); const { data: profile } = await supabase.from('profiles').select('*').eq('id', cleanCode).single()
-        if (!profile) throw new Error("Code invalide"); setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); setAvatarUrl(profile.avatar_url); setSubscriptionTier(profile.subscription_tier || 'free'); await fetchItems(profile.id); setView('dashboard')
+        if (!profile) throw new Error("Code invalide"); 
+        setUid(profile.id); localStorage.setItem('dressflow_uid', profile.id);
+        setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); setAvatarUrl(profile.avatar_url); 
+        setSubscriptionTier(profile.subscription_tier || 'free'); await fetchItems(profile.id); setView('dashboard')
       } else { const { data, error: authErr } = await supabase.auth.signInWithPassword({ email, password }); if (authErr) throw authErr; await syncProfile(email); }
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0]
-    if (file) { setView('loading-ai'); setLoading(true); try { const aiTags = await analyzeClothing(file); setNewItem({ ...newItem, ...aiTags, icon: getIconForType(aiTags.type), activity: 'Quotidien' }); setTempFile(file); setSelectedImage(URL.createObjectURL(file)); setView('add-detail') } catch (err) { setView('add-detail') } finally { setLoading(false) } }
+    if (file) { 
+      setLoading(true); 
+      try { 
+        // Suppression de l'IA lente (analyzeClothing) sur demande utilisateur
+        setNewItem({ ...newItem, icon: getIconForType(newItem.type) }); 
+        setTempFile(file); 
+        setSelectedImage(URL.createObjectURL(file)); 
+        setView('add-detail') 
+      } catch (err) { 
+        setView('add-detail') 
+      } finally { 
+        setLoading(false) 
+      } 
+    }
   }
 
   const handleAddItem = async () => {
