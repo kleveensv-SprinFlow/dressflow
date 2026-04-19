@@ -129,6 +129,8 @@ function App() {
   const [inputCode, setInputCode] = useState('')
   const [loginMode, setLoginMode] = useState('code')
   const [subscriptionTier, setSubscriptionTier] = useState('free') // 'free' or 'premium'
+  const [aiGensRemaining, setAiGensRemaining] = useState(5)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
@@ -243,6 +245,14 @@ function App() {
       localStorage.removeItem('suitcase'); localStorage.removeItem('travelData'); setView('splash')
     } catch (err) { alert("Erreur") } finally { setLoading(false) }
   }
+  
+  const handleDeleteAccount = async () => {
+    setLoading(true); try {
+      const { error } = await supabase.from('profiles').delete().eq('id', uid)
+      if (error) throw error;
+      await supabase.auth.signOut(); setUid(''); setName(''); setView('splash'); setShowDeleteModal(false);
+    } catch (err) { alert(err.message) } finally { setLoading(false) }
+  }
 
   const handleGenerateSuitcase = async () => {
     if (!travelData.lat) { alert("Choisis une destination !"); return; }
@@ -263,8 +273,13 @@ function App() {
 
   const handleGenerateOutfitRequest = async () => {
     if (items.length < 3) { alert("Ajoute plus d'habits !"); return; }
-    if (subscriptionTier === 'free') { setView('subscription'); return; }
-    setOutfitLoading(true); setStylistMode('ai'); try { const result = await generateOutfit(items, weather || await getLocalWeather()); setCurrentOutfit(result); setView('outfit-result') } catch (err) { alert("Erreur") } finally { setOutfitLoading(false) }
+    if (subscriptionTier === 'free' && aiGensRemaining <= 0) { setView('subscription'); return; }
+    setOutfitLoading(true); setStylistMode('ai'); 
+    try { 
+      const result = await generateOutfit(items, weather || await getLocalWeather()); 
+      setCurrentOutfit(result); setView('outfit-result');
+      if (subscriptionTier === 'free') setAiGensRemaining(prev => prev - 1);
+    } catch (err) { alert("Erreur") } finally { setOutfitLoading(false) }
   }
 
   const handleValidateOutfit = async () => {
@@ -561,27 +576,50 @@ function App() {
                 <p className="subtitle" style={{ fontSize: '0.75rem', marginTop: '1rem' }}>Partage ce code pour synchroniser ton dressing sur un autre appareil.</p>
               </div>
 
-              {!isEmailConfirmed && (
-                <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', border: '2px solid var(--primary)', background: 'rgba(var(--primary-rgb), 0.05)' }}>
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}><ShieldAlert color="var(--primary)" size={24} /><div><div style={{ fontWeight: 800 }}>Sécuriser mon compte</div><p className="subtitle" style={{ fontSize: '0.8rem', margin: '5px 0 1rem' }}>Ajoute un email pour ne jamais perdre ton dressing.</p><button className="btn-primary" style={{ height: '40px', fontSize: '0.8rem' }} onClick={() => setView('complete-profile')}>Configurer</button></div></div>
-                </div>
-              )}
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5, marginBottom: '0.8rem' }}>SÉCURITÉ DU COMPTE</div>
+                {isEmailConfirmed ? (
+                  <div className="status-badge"><ShieldCheck size={16} /> Compte sécurisé (email)</div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}><ShieldAlert color="#f59e0b" size={24} /><div><div style={{ fontWeight: 800 }}>Compte non sécurisé</div><p className="subtitle" style={{ fontSize: '0.75rem', margin: '4px 0 10px' }}>Liez un email pour ne jamais perdre votre dressing.</p><button className="btn-primary" style={{ height: '36px', fontSize: '0.75rem', padding: '0 15px' }} onClick={() => setView('complete-profile')}>Lier mon dressing</button></div></div>
+                )}
+              </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', paddingBottom: '5rem' }}>
-        <button className="btn-secondary" style={{ justifyContent: 'space-between', opacity: isEmailConfirmed ? 1 : 0.8 }} onClick={() => setView('subscription')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><ShoppingBag size={18} /><span>Abonnement</span></div>
-          {!isEmailConfirmed ? (
-            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--primary)' }}>Voir les offres ✨</span>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ fontSize: '0.7rem', fontWeight: 800, background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '8px' }}>{subscriptionTier.toUpperCase()}</span>
-              <ChevronRight size={18} opacity={0.3} />
-            </div>
-          )}
-        </button>
-        <button className="btn-secondary" style={{ justifyContent: 'space-between' }} onClick={() => setGender(gender === 'female' ? 'male' : 'female')}><span>Style: {gender === 'female' ? 'Femme 👩' : 'Homme 👨'}</span><ChevronRight size={18} opacity={0.3} /></button>
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5, marginBottom: '1rem' }}>MON PLAN : {subscriptionTier === 'premium' ? 'PREMIUM ✨' : 'GRATUIT'}</div>
+                <div className="gauge-container">
+                  <div className="gauge-header"><span>Vêtements ajoutés</span><span>{items.length} / 40</span></div>
+                  <div className="gauge-bar"><div className="gauge-fill" style={{ width: `${Math.min(100, (items.length / 40) * 100)}%` }}></div></div>
+                </div>
+                <div className="gauge-container">
+                  <div className="gauge-header"><span>Générations IA restantes</span><span>{subscriptionTier === 'premium' ? 'Illimité' : `${aiGensRemaining} / 5`}</span></div>
+                  <div className="gauge-bar"><div className="gauge-fill" style={{ width: `${subscriptionTier === 'premium' ? 100 : (aiGensRemaining / 5) * 100}%` }}></div></div>
+                </div>
+                {subscriptionTier === 'free' && (
+                  <button className="btn-secondary" style={{ width: '100%', marginBottom: '1rem', fontSize: '0.8rem' }} onClick={() => console.log("Pub simulée")}>🎬 Regarder une publicité pour +1 tenue</button>
+                )}
+                <button className="btn-gold" style={{ width: '100%', height: '50px' }}><Sparkles size={18} /> Débloquer l'illimité (Premium)</button>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5, marginBottom: '1rem' }}>APPARENCE & THÈME</div>
+                <div style={{ display: 'flex', gap: '0.8rem' }}>
+                  <button onClick={() => setGender('female')} className={`theme-pill ${gender === 'female' ? 'active' : ''}`}>👩 Femme</button>
+                  <button onClick={() => setGender('male')} className={`theme-pill ${gender === 'male' ? 'active' : ''}`}>👨 Homme</button>
+                  <button onClick={() => setGender('neutral')} className={`theme-pill ${gender === 'neutral' ? 'active' : ''}`}>✨ Neutre</button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <button className="btn-secondary" style={{ justifyContent: 'space-between' }} onClick={() => setView('subscription')}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><ShoppingBag size={18} /><span>Abonnement</span></div><ChevronRight size={18} opacity={0.3} /></button>
                 <button className="btn-secondary" style={{ justifyContent: 'space-between', color: '#f43f5e' }} onClick={handleLogout}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><LogOut size={18} /><span>Déconnexion</span></div></button>
               </div>
+
+              <div className="danger-zone">
+                <div style={{ color: '#f43f5e', fontWeight: 900, fontSize: '0.7rem', marginBottom: '1rem', letterSpacing: '1px' }}>ZONE DE DANGER</div>
+                <button className="btn-danger" style={{ width: '100%', height: '45px', borderRadius: '15px' }} onClick={() => setShowDeleteModal(true)}><Trash2 size={18} /> Supprimer mon compte</button>
+              </div>
+              <div style={{ height: '100px' }}></div>
             </motion.div>
           )}
 
@@ -690,6 +728,20 @@ function App() {
                     <ChevronRight size={18} opacity={0.3} />
                   </div>
                 )) : citySearch.length > 2 && <p className="subtitle" style={{ textAlign: 'center', padding: '2rem' }}>Aucune ville trouvée... 🔍</p>}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showDeleteModal && (
+          <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card" style={{ margin: 'auto', padding: '2rem', width: '90%', maxWidth: '400px', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><AlertCircle size={35} /></div>
+              <h2 className="title" style={{ fontSize: '1.4rem' }}>Supprimer le compte ?</h2>
+              <p className="subtitle" style={{ margin: '1rem 0 2rem' }}>Cette action est irréversible. Toutes vos données seront effacées.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <button className="btn-danger" style={{ height: '50px', borderRadius: '15px' }} onClick={handleDeleteAccount} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Oui, supprimer définitivement"}</button>
+                <button className="btn-secondary" style={{ height: '50px', borderRadius: '15px' }} onClick={() => setShowDeleteModal(false)}>Annuler</button>
               </div>
             </motion.div>
           </div>
