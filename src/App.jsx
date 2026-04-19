@@ -784,7 +784,6 @@ function App() {
                       <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1, color: '#f43f5e' }} onClick={() => handleDeleteItem(selectedItem.id)}><Trash2 size={18} /></motion.button>
                     </div>
                   </>
-                  </>
                 )}
               </motion.div>
             </div>
