@@ -216,30 +216,48 @@ function App() {
   const searchTimeoutRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  const ALL_TYPES = ['T-shirt', 'Crop-top', 'Hoodie', 'Sweat', 'Chemise', 'Polo', 'Top', 'Blouse', 'Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino', 'Robe', 'Veste', 'Blazer', 'Manteau', 'Parka', 'Trench', 'Cardigan', 'Pull', 'Maillot de bain', 'Pyjama', 'Basket', 'Bottes', 'Sandales', 'Escarpins', 'Accessoire', 'Sac', 'Casquette', 'Bonnet']
+  const CATEGORY_HIERARCHY = {
+    "Haut": ["T-shirt", "Chemise", "Pull", "Sweat", "Veste", "Manteau", "Top / Blouse"],
+    "Bas": ["Pantalon", "Short", "Jogging", "Jean", "Jupe", "Legging"],
+    "Chaussures": ["Baskets", "Bottes", "Sandales", "Talons", "Ville"],
+    "Chapeau": ["Casquette", "Bonnet", "Chapeau", "Bob"]
+  }
+  const MAIN_CATEGORIES = Object.keys(CATEGORY_HIERARCHY)
   const ALL_COLORS = ['Blanc', 'Noir', 'Gris', 'Beige', 'Marine', 'Bleu Ciel', 'Kaki', 'Vert Sapin', 'Bordeaux', 'Rouge', 'Rose Poudré', 'Rose', 'Moutarde', 'Jaune', 'Lilas', 'Violet', 'Terracotta', 'Orange', 'Or', 'Argent', 'Marron', 'Camel']
   const ALL_ACTIVITIES = ['Quotidien', 'Sport', 'Soirée', 'Travail']
   const ALL_SEASONS = ['Été', 'Hiver', 'Printemps', 'Automne', 'Toutes saisons']
 
-  const [newItem, setNewItem] = useState({ type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
+  const [newItem, setNewItem] = useState({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
   const [tempFile, setTempFile] = useState(null)
 
   const filteredItems = useMemo(() => {
-    if (activeFilter === 'Tous') return items;
-    return items.filter(item => {
-      if (activeFilter === 'Mes Hauts') return ['T-shirt', 'Chemise', 'Pull', 'Hoodie', 'Sweat', 'Top', 'Blouse', 'Veste', 'Blazer', 'Manteau', 'Parka', 'Trench', 'Cardigan'].includes(item.type)
-      if (activeFilter === 'Mes Bas') return ['Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino'].includes(item.type)
-      if (activeFilter === 'Extérieur') return ['Veste', 'Manteau', 'Parka', 'Trench', 'Blazer'].includes(item.type)
-      if (activeFilter === 'Robe') return item.type === 'Robe'
-      if (activeFilter === 'Sport') return item.activity === 'Sport'
-      if (activeFilter === 'Soirée') return item.activity === 'Soirée'
-      return true
-    })
+    let result = [...items];
+    if (activeFilter !== 'Tous') {
+      result = result.filter(item => {
+        if (activeFilter === 'Mes Hauts') return item.main_category === 'Haut'
+        if (activeFilter === 'Mes Bas') return item.main_category === 'Bas'
+        if (activeFilter === 'Extérieur') return item.type === 'Veste' || item.type === 'Manteau'
+        if (activeFilter === 'Robe') return item.type === 'Robe' || item.type === 'Jupe'
+        if (activeFilter === 'Sport') return item.activity === 'Sport'
+        if (activeFilter === 'Soirée') return item.activity === 'Soirée'
+        return true
+      })
+    }
+    // Sort by Main Category order
+    const order = ["Haut", "Bas", "Chaussures", "Chapeau"]
+    return result.sort((a, b) => order.indexOf(a.main_category) - order.indexOf(b.main_category))
   }, [items, activeFilter])
 
   const generateRandomUID = () => { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let res = ''; for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res }
-  const getIconForType = (type) => { const icons = { 'T-shirt': '👕', 'Hoodie': '🧥', 'Pantalon': '👖', 'Jean': '👖', 'Robe': '👗', 'Veste': '🧥', 'Basket': '👟', 'Sac': '👜', 'Short': '🩳' }; return icons[type] || '✨' }
+  const getIconForType = (type) => { 
+    const icons = { 
+      'T-shirt': '👕', 'Chemise': '👔', 'Pull': '🧶', 'Sweat': '🧥', 'Veste': '🧥', 'Manteau': '🧥', 
+      'Pantalon': '👖', 'Short': '🩳', 'Jean': '👖', 'Jupe': '👗', 'Baskets': '👟', 'Bottes': '👢',
+      'Sandales': '👡', 'Ville': '👞', 'Casquette': '🧢', 'Bonnet': '👒'
+    }; 
+    return icons[type] || '✨' 
+  }
 
   const fetchItems = async (profileId) => {
     setLoading(true); const { data } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
@@ -374,7 +392,14 @@ function App() {
   }
 
   const handleUpdateItem = async () => {
-    setLoading(true); const { error } = await supabase.from('clothes').update({ ...editForm, icon: getIconForType(editForm.type) }).eq('id', selectedItem.id)
+    setLoading(true); const { error } = await supabase.from('clothes').update({
+        main_category: editForm.main_category,
+        type: editForm.type,
+        color: editForm.color,
+        season: editForm.season,
+        activity: editForm.activity,
+        icon: getIconForType(editForm.type)
+      }).eq('id', editForm.id)
     if (error) alert(error.message); else { await fetchItems(uid); setIsEditing(false); setSelectedItem(null); } setLoading(false)
   }
 
@@ -407,12 +432,13 @@ function App() {
     if (files.length === 1) {
       setTempFile(files[0])
       setSelectedImage(URL.createObjectURL(files[0]))
-      setNewItem({ ...newItem, type: 'T-shirt', icon: '👕' })
+      setNewItem({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
       setView('add-detail')
     } else {
       const initialBulk = files.map(f => ({
         file: f,
         preview: URL.createObjectURL(f),
+        main_category: 'Haut',
         type: 'T-shirt',
         color: 'Blanc',
         season: 'Toutes saisons',
@@ -434,6 +460,7 @@ function App() {
         const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
         await supabase.from('clothes').insert([{ 
           profile_id: uid, 
+          main_category: item.main_category,
           type: item.type, 
           color: item.color, 
           season: item.season, 
@@ -693,15 +720,29 @@ function App() {
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                       <div style={{ width: '80px', height: '80px', borderRadius: '15px', overflow: 'hidden', background: 'white', border: '1px solid rgba(0,0,0,0.05)' }}><img src={item.preview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
                       <div style={{ flex: 1 }}>
-                        <label className="subtitle" style={{ fontSize: '0.6rem', fontWeight: 800, marginBottom: '5px', display: 'block' }}>TYPE DE VÊTEMENT</label>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                          {['T-shirt', 'Pantalon', 'Robe', 'Veste', 'Basket'].map(t => (
-                            <button key={t} onClick={() => {
-                              const newBulk = [...bulkItems];
-                              newBulk[idx] = { ...newBulk[idx], type: t, icon: getIconForType(t) };
-                              setBulkItems(newBulk);
-                            }} className={`filter-pill ${item.type === t ? 'active' : ''}`} style={{ fontSize: '0.65rem', padding: '4px 10px' }}>{t}</button>
-                          ))}
+                        <div style={{ marginBottom: '10px' }}>
+                          <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>CATÉGORIE</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {MAIN_CATEGORIES.map(c => (
+                              <button key={c} onClick={() => {
+                                const newBulk = [...bulkItems];
+                                newBulk[idx] = { ...newBulk[idx], main_category: c, type: CATEGORY_HIERARCHY[c][0], icon: getIconForType(CATEGORY_HIERARCHY[c][0]) };
+                                setBulkItems(newBulk);
+                              }} className={`filter-pill ${item.main_category === c ? 'active' : ''}`} style={{ fontSize: '0.6rem', padding: '3px 8px' }}>{c}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>TYPE</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {CATEGORY_HIERARCHY[item.main_category || 'Haut'].map(t => (
+                              <button key={t} onClick={() => {
+                                const newBulk = [...bulkItems];
+                                newBulk[idx] = { ...newBulk[idx], type: t, icon: getIconForType(t) };
+                                setBulkItems(newBulk);
+                              }} className={`filter-pill ${item.type === t ? 'active' : ''}`} style={{ fontSize: '0.6rem', padding: '3px 8px' }}>{t}</button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -737,8 +778,13 @@ function App() {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <section>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Tag size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Type de pièce</label></div>
-                  <ChoiceSelector options={ALL_TYPES} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} getIcon={(type) => <div style={{ fontSize: '1.2rem' }}>{getIconForType(type)}</div>} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Layers size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Catégorie</label></div>
+                  <ChoiceSelector options={MAIN_CATEGORIES} selected={newItem.main_category} onSelect={(val) => setNewItem({...newItem, main_category: val, type: CATEGORY_HIERARCHY[val][0]})} />
+                </section>
+
+                <section>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Tag size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Type de vêtement</label></div>
+                  <ChoiceSelector options={CATEGORY_HIERARCHY[newItem.main_category] || []} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} />
                 </section>
 
                 <section>
@@ -900,7 +946,8 @@ function App() {
                 {isEditing ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '2rem' }}>
                     <h2 className="title">Modifier le vêtement</h2>
-                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE</label><ChoiceSelector options={ALL_TYPES} selected={editForm.type} onSelect={(val) => setEditForm({...editForm, type: val, icon: getIconForType(val)})} getIcon={getIconForType} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>CATÉGORIE</label><ChoiceSelector options={MAIN_CATEGORIES} selected={editForm.main_category} onSelect={(val) => setEditForm({...editForm, main_category: val, type: CATEGORY_HIERARCHY[val][0]})} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE</label><ChoiceSelector options={CATEGORY_HIERARCHY[editForm.main_category] || []} selected={editForm.type} onSelect={(val) => setEditForm({...editForm, type: val, icon: getIconForType(val)})} /></div>
                     <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR</label><ColorPalette selected={editForm.color} onSelect={(val) => setEditForm({...editForm, color: val})} /></div>
                     <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISON</label><ChoiceSelector options={ALL_SEASONS} selected={editForm.season} onSelect={(val) => setEditForm({...editForm, season: val})} getIcon={() => '☀️'} /></div>
                     <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉ</label><ChoiceSelector options={ALL_ACTIVITIES} selected={editForm.activity} onSelect={(val) => setEditForm({...editForm, activity: val})} getIcon={() => '🏷️'} /></div>
