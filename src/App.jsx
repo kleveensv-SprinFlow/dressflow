@@ -12,7 +12,7 @@ import {
   UserCircle, Edit3, Save, Info, MapPinned, History,
   Eye, EyeOff, UploadCloud, Dices, Layers, MessageCircle,
   Wind as WindIcon, Snowflake, CloudSun, CalendarDays,
-  Suitcase, Umbrella, ThermometerSnowflake, Footprints
+  Briefcase as SuitcaseIcon, Umbrella, ThermometerSnowflake, Footprints
 } from 'lucide-react'
 import { format, addDays, differenceInDays, parseISO } from 'date-fns'
 import { App as CapApp } from '@capacitor/app'
@@ -427,14 +427,14 @@ function App() {
                   <div style={{ flex: 1 }}><div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>DESTINATION</div><div style={{ fontWeight: 800 }}>{travelData.destination || "Où pars-tu ?"}</div></div>
                 </div>
                 
-                <div style={{ display: 'flex', gap: '0.8rem' }}>
-                  <div style={{ flex: 1, padding: '1rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)' }}>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>DÉPART</div>
-                    <input type="date" value={travelData.startDate} onChange={(e) => setTravelData({...travelData, startDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.9rem', outline: 'none' }} />
+                <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 140px', padding: '0.8rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)', minWidth: 0 }}>
+                    <div style={{ fontSize: '0.6rem', fontWeight: 800, opacity: 0.5 }}>DÉPART</div>
+                    <input type="date" value={travelData.startDate} onChange={(e) => setTravelData({...travelData, startDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.85rem', outline: 'none', color: 'inherit' }} />
                   </div>
-                  <div style={{ flex: 1, padding: '1rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)' }}>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>RETOUR</div>
-                    <input type="date" value={travelData.endDate} onChange={(e) => setTravelData({...travelData, endDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.9rem', outline: 'none' }} />
+                  <div style={{ flex: '1 1 140px', padding: '0.8rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)', minWidth: 0 }}>
+                    <div style={{ fontSize: '0.6rem', fontWeight: 800, opacity: 0.5 }}>RETOUR</div>
+                    <input type="date" value={travelData.endDate} onChange={(e) => setTravelData({...travelData, endDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.85rem', outline: 'none', color: 'inherit' }} />
                   </div>
                 </div>
 
@@ -445,7 +445,7 @@ function App() {
 
               {suitcase.length > 0 && (
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}><Suitcase size={22} color="var(--primary)" /><h3 className="title" style={{ margin: 0, fontSize: '1.4rem' }}>Ma Valise Idéale</h3></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}><SuitcaseIcon size={22} color="var(--primary)" /><h3 className="title" style={{ margin: 0, fontSize: '1.4rem' }}>Ma Valise Idéale</h3></div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
                     {suitcase.map((pack, idx) => (
                       <div key={idx} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem' }}>
