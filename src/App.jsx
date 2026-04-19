@@ -109,16 +109,55 @@ const SlotMachine = () => {
   )
 }
 
-const ChoiceSelector = ({ options, selected, onSelect, getIcon }) => (
-  <div className="choice-scroller">
-    {options.map(opt => (
-      <motion.div key={opt} whileTap={{ scale: 0.95 }} className={`choice-item ${selected === opt ? 'active' : ''}`} onClick={() => onSelect(opt)}>
-        <span>{getIcon ? getIcon(opt) : <Tag size={18} />}</span>
-        <label>{opt}</label>
-      </motion.div>
-    ))}
-  </div>
-)
+const ChoiceSelector = ({ options, selected, onSelect, getIcon, multi = false }) => {
+  const isSelected = (opt) => multi ? selected?.includes(opt) : selected === opt;
+  const toggle = (opt) => {
+    if (!multi) return onSelect(opt);
+    const current = selected || [];
+    if (current.includes(opt)) onSelect(current.filter(i => i !== opt));
+    else onSelect([...current, opt]);
+  };
+
+  return (
+    <div className="choice-scroller">
+      {options.map(opt => (
+        <motion.div key={opt} whileTap={{ scale: 0.95 }} className={`choice-item ${isSelected(opt) ? 'active' : ''}`} onClick={() => toggle(opt)}>
+          <span>{getIcon ? getIcon(opt) : <Tag size={18} />}</span>
+          <label>{opt}</label>
+        </motion.div>
+      ))}
+    </div>
+  );
+};
+
+const SearchSelector = ({ options, selected, onSelect, placeholder }) => {
+  const [search, setSearch] = useState('');
+  const filtered = options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+  const exactMatch = options.find(opt => opt.toLowerCase() === search.toLowerCase());
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', marginBottom: '10px' }}>
+        <Search size={18} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', opacity: 0.3 }} />
+        <input type="text" className="input-styled" style={{ paddingLeft: '3rem', height: '50px', fontSize: '0.9rem' }} placeholder={placeholder} value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+      <div className="choice-scroller">
+        {search && !exactMatch && (
+          <motion.div whileTap={{ scale: 0.95 }} className="choice-item" style={{ borderColor: 'var(--primary)', borderStyle: 'dashed' }} onClick={() => { onSelect(search); setSearch(''); }}>
+            <span><Plus size={20} color="var(--primary)" /></span>
+            <label>Ajouter "{search}"</label>
+          </motion.div>
+        )}
+        {(search ? filtered : options).map(opt => (
+          <motion.div key={opt} whileTap={{ scale: 0.95 }} className={`choice-item ${selected === opt ? 'active' : ''}`} onClick={() => { onSelect(opt); setSearch(''); }}>
+            <span><Tag size={18} /></span>
+            <label>{opt}</label>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const ColorPalette = ({ selected, onSelect }) => {
   const colors = [
@@ -225,9 +264,9 @@ function App() {
   const MAIN_CATEGORIES = Object.keys(CATEGORY_HIERARCHY)
   const ALL_COLORS = ['Blanc', 'Noir', 'Gris', 'Beige', 'Marine', 'Bleu Ciel', 'Kaki', 'Vert Sapin', 'Bordeaux', 'Rouge', 'Rose Poudré', 'Rose', 'Moutarde', 'Jaune', 'Lilas', 'Violet', 'Terracotta', 'Orange', 'Or', 'Argent', 'Marron', 'Camel']
   const ALL_ACTIVITIES = ['Quotidien', 'Sport', 'Soirée', 'Travail']
-  const ALL_SEASONS = ['Été', 'Hiver', 'Printemps', 'Automne', 'Toutes saisons']
+  const ALL_SEASONS = ['Été', 'Hiver', 'Printemps', 'Automne']
 
-  const [newItem, setNewItem] = useState({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
+  const [newItem, setNewItem] = useState({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
   const [tempFile, setTempFile] = useState(null)
 
@@ -396,8 +435,8 @@ function App() {
         main_category: editForm.main_category,
         type: editForm.type,
         color: editForm.color,
-        season: editForm.season,
-        activity: editForm.activity,
+        season: Array.isArray(editForm.season) ? editForm.season.join(', ') : editForm.season,
+        activity: Array.isArray(editForm.activity) ? editForm.activity.join(', ') : editForm.activity,
         icon: getIconForType(editForm.type)
       }).eq('id', editForm.id)
     if (error) alert(error.message); else { await fetchItems(uid); setIsEditing(false); setSelectedItem(null); } setLoading(false)
@@ -432,7 +471,7 @@ function App() {
     if (files.length === 1) {
       setTempFile(files[0])
       setSelectedImage(URL.createObjectURL(files[0]))
-      setNewItem({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: 'Été', activity: 'Quotidien', icon: '👕' })
+      setNewItem({ main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
       setView('add-detail')
     } else {
       const initialBulk = files.map(f => ({
@@ -463,8 +502,8 @@ function App() {
           main_category: item.main_category,
           type: item.type, 
           color: item.color, 
-          season: item.season, 
-          activity: item.activity, 
+          season: Array.isArray(item.season) ? item.season.join(', ') : item.season, 
+          activity: Array.isArray(item.activity) ? item.activity.join(', ') : item.activity, 
           icon: item.icon, 
           image_url: publicUrl, 
           last_worn_date: new Date().toISOString() 
@@ -732,7 +771,7 @@ function App() {
                             ))}
                           </div>
                         </div>
-                        <div>
+                        <div style={{ marginBottom: '10px' }}>
                           <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>TYPE</label>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                             {CATEGORY_HIERARCHY[item.main_category || 'Haut'].map(t => (
@@ -742,6 +781,22 @@ function App() {
                                 setBulkItems(newBulk);
                               }} className={`filter-pill ${item.type === t ? 'active' : ''}`} style={{ fontSize: '0.6rem', padding: '3px 8px' }}>{t}</button>
                             ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>SAISONS</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {ALL_SEASONS.map(s => {
+                              const isSel = item.season?.includes(s);
+                              return (
+                                <button key={s} onClick={() => {
+                                  const newBulk = [...bulkItems];
+                                  const current = item.season || [];
+                                  newBulk[idx] = { ...newBulk[idx], season: isSel ? current.filter(x => x !== s) : [...current, s] };
+                                  setBulkItems(newBulk);
+                                }} className={`filter-pill ${isSel ? 'active' : ''}`} style={{ fontSize: '0.6rem', padding: '3px 8px' }}>{s}</button>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -784,7 +839,7 @@ function App() {
 
                 <section>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Tag size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Type de vêtement</label></div>
-                  <ChoiceSelector options={CATEGORY_HIERARCHY[newItem.main_category] || []} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} />
+                  <SearchSelector options={CATEGORY_HIERARCHY[newItem.main_category] || []} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} placeholder="Rechercher ou créer un type..." />
                 </section>
 
                 <section>
@@ -793,13 +848,13 @@ function App() {
                 </section>
 
                 <section>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Sun size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Saison</label></div>
-                  <ChoiceSelector options={ALL_SEASONS} selected={newItem.season} onSelect={(val) => setNewItem({...newItem, season: val})} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Sun size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Saisons (Multi-sélection)</label></div>
+                  <ChoiceSelector multi options={ALL_SEASONS} selected={newItem.season} onSelect={(val) => setNewItem({...newItem, season: val})} />
                 </section>
 
                 <section>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Briefcase size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Activité</label></div>
-                  <ChoiceSelector options={ALL_ACTIVITIES} selected={newItem.activity} onSelect={(val) => setNewItem({...newItem, activity: val})} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Briefcase size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Activités (Multi-sélection)</label></div>
+                  <ChoiceSelector multi options={ALL_ACTIVITIES} selected={newItem.activity} onSelect={(val) => setNewItem({...newItem, activity: val})} />
                 </section>
               </div>
 
@@ -947,10 +1002,10 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '2rem' }}>
                     <h2 className="title">Modifier le vêtement</h2>
                     <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>CATÉGORIE</label><ChoiceSelector options={MAIN_CATEGORIES} selected={editForm.main_category} onSelect={(val) => setEditForm({...editForm, main_category: val, type: CATEGORY_HIERARCHY[val][0]})} /></div>
-                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE</label><ChoiceSelector options={CATEGORY_HIERARCHY[editForm.main_category] || []} selected={editForm.type} onSelect={(val) => setEditForm({...editForm, type: val, icon: getIconForType(val)})} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE</label><SearchSelector options={CATEGORY_HIERARCHY[editForm.main_category] || []} selected={editForm.type} onSelect={(val) => setEditForm({...editForm, type: val, icon: getIconForType(val)})} placeholder="Rechercher..." /></div>
                     <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR</label><ColorPalette selected={editForm.color} onSelect={(val) => setEditForm({...editForm, color: val})} /></div>
-                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISON</label><ChoiceSelector options={ALL_SEASONS} selected={editForm.season} onSelect={(val) => setEditForm({...editForm, season: val})} getIcon={() => '☀️'} /></div>
-                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉ</label><ChoiceSelector options={ALL_ACTIVITIES} selected={editForm.activity} onSelect={(val) => setEditForm({...editForm, activity: val})} getIcon={() => '🏷️'} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISONS</label><ChoiceSelector multi options={ALL_SEASONS} selected={Array.isArray(editForm.season) ? editForm.season : (typeof editForm.season === 'string' ? editForm.season.split(', ') : [])} onSelect={(val) => setEditForm({...editForm, season: val})} /></div>
+                    <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉS</label><ChoiceSelector multi options={ALL_ACTIVITIES} selected={Array.isArray(editForm.activity) ? editForm.activity : (typeof editForm.activity === 'string' ? editForm.activity.split(', ') : [])} onSelect={(val) => setEditForm({...editForm, activity: val})} /></div>
                     <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}><motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1 }} onClick={handleUpdateItem}>Sauvegarder ✨</motion.button><motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => setIsEditing(false)}>Annuler</motion.button></div>
                   </div>
                 ) : (
