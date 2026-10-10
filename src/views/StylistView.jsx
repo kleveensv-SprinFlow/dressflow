@@ -36,6 +36,34 @@ const StylistView = ({
         <p className="subtitle">Des règles de couleur, de météo et de rotation appliquées à ton dressing.</p>
       </header>
 
+      <section className="glass-card" aria-label="Repères de mode et associations de couleurs" style={{ padding: '1.1rem', marginBottom: '1.5rem' }}>
+        <h2 className="title" style={{ fontSize: '1.15rem', letterSpacing: '-0.3px', marginBottom: '0.5rem' }}>Les bases des couleurs</h2>
+        <p className="subtitle" style={{ fontSize: '0.78rem', lineHeight: 1.5, marginTop: 0, marginBottom: '0.9rem' }}>
+          Dressflow privilégie les associations cohérentes, sans interdire un contraste que tu aimes.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.7rem' }}>
+          <div style={{ background: 'rgba(148,163,184,0.12)', borderRadius: '14px', padding: '0.75rem' }}>
+            <strong style={{ display: 'block', fontSize: '0.78rem', marginBottom: '0.25rem' }}>Neutres + accent</strong>
+            <span style={{ fontSize: '0.72rem', lineHeight: 1.45 }}>Noir, beige, gris ou marine équilibrent une couleur plus vive.</span>
+          </div>
+          <div style={{ background: 'rgba(148,163,184,0.12)', borderRadius: '14px', padding: '0.75rem' }}>
+            <strong style={{ display: 'block', fontSize: '0.78rem', marginBottom: '0.25rem' }}>Ton sur ton</strong>
+            <span style={{ fontSize: '0.72rem', lineHeight: 1.45 }}>Plusieurs nuances d’une même famille donnent un rendu continu.</span>
+          </div>
+          <div style={{ background: 'rgba(148,163,184,0.12)', borderRadius: '14px', padding: '0.75rem' }}>
+            <strong style={{ display: 'block', fontSize: '0.78rem', marginBottom: '0.25rem' }}>Couleurs proches</strong>
+            <span style={{ fontSize: '0.72rem', lineHeight: 1.45 }}>Des teintes voisines créent une harmonie douce.</span>
+          </div>
+          <div style={{ background: 'rgba(148,163,184,0.12)', borderRadius: '14px', padding: '0.75rem' }}>
+            <strong style={{ display: 'block', fontSize: '0.78rem', marginBottom: '0.25rem' }}>Contraste complémentaire</strong>
+            <span style={{ fontSize: '0.72rem', lineHeight: 1.45 }}>Des couleurs opposées attirent l’œil ; garde une teinte dominante.</span>
+          </div>
+        </div>
+        <p className="subtitle" style={{ fontSize: '0.7rem', lineHeight: 1.4, marginBottom: 0 }}>
+          Ce sont des repères visuels : coupe, motifs, matière, occasion et préférence personnelle comptent aussi. La photo seule ne permet pas toujours de détecter fidèlement une couleur.
+        </p>
+      </section>
+
       <div className="filter-scroll" style={{ marginBottom: '1.5rem' }} role="group" aria-label="Mode de composition">
         <button className={`filter-pill ${stylistMode === 'ai' ? 'active' : ''}`} onClick={() => setStylistMode('ai')}>
           Composition guidée
