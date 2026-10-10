@@ -14,6 +14,8 @@ const OUTFIT_PARTS = [
 const StylistView = ({
   stylistMode,
   setStylistMode,
+  stylistOccasion,
+  setStylistOccasion,
   currentOutfit,
   outfitLoading,
   handleGenerateOutfitRequest,
@@ -33,7 +35,7 @@ const StylistView = ({
     <div className="dashboard-container" style={{ paddingBottom: '120px' }}>
       <header style={{ marginBottom: '1.5rem' }}>
         <h1 className="title">Styliste Dressflow</h1>
-        <p className="subtitle">Des règles de couleur, de météo et de rotation appliquées à ton dressing.</p>
+        <p className="subtitle">Un moteur de style local combine couleurs, météo, occasion et rotation du dressing — sans appel à une IA pour composer les tenues.</p>
       </header>
 
       <section className="glass-card" aria-label="Repères de mode et associations de couleurs" style={{ padding: '1.1rem', marginBottom: '1.5rem' }}>
@@ -66,7 +68,7 @@ const StylistView = ({
 
       <div className="filter-scroll" style={{ marginBottom: '1.5rem' }} role="group" aria-label="Mode de composition">
         <button className={`filter-pill ${stylistMode === 'ai' ? 'active' : ''}`} onClick={() => setStylistMode('ai')}>
-          Composition guidée
+          Styliste automatique
         </button>
         <button className={`filter-pill ${stylistMode === 'manual' ? 'active' : ''}`} onClick={() => setStylistMode('manual')}>
           Mode manuel
@@ -74,6 +76,25 @@ const StylistView = ({
       </div>
 
       {stylistMode === 'ai' ? (
+        <section className="glass-card" style={{ padding: '1rem', marginBottom: '1rem' }} aria-label="Occasion de la tenue">
+          <h2 className="title" style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Pour quelle occasion ?</h2>
+          <div className="filter-scroll" role="group" aria-label="Choisir une occasion">
+            {['Quotidien', 'Travail', 'Sport', 'Soirée'].map((occasion) => (
+              <button
+                type="button"
+                key={occasion}
+                className={`filter-pill ${stylistOccasion === occasion ? 'active' : ''}`}
+                aria-pressed={stylistOccasion === occasion}
+                onClick={() => setStylistOccasion(occasion)}
+              >
+                {occasion}
+              </button>
+            ))}
+          </div>
+          <p className="subtitle" style={{ fontSize: '0.72rem', marginBottom: 0, marginTop: '0.65rem' }}>
+            L'occasion influence le classement des vêtements lorsque leurs activités sont renseignées.
+          </p>
+        </section>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {currentOutfit ? (
             <motion.div initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
