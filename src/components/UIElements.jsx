@@ -137,7 +137,7 @@ export const CategorySlider = ({ title, items, selectedId, onSelect }) => {
             type="button"
             key={item.id}
             className={`slider-card ${selectedId === item.id ? 'active' : ''}`}
-            onClick={() => onSelect(item.id)}
+            onClick={() => onSelect(selectedId === item.id ? null : item.id)}
             aria-pressed={selectedId === item.id}
             aria-label={`${item.type || title}, ${item.color || 'couleur non définie'}`}
             title={item.type || title}
