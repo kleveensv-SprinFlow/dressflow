@@ -326,6 +326,22 @@ function App() {
   }
 
   const handleValidateOutfit = async () => {
+    if (stylistMode === 'manual') {
+      const chosenTop = items.find(item => item.id === manualOutfit.top);
+      const chosenBottom = items.find(item => item.id === manualOutfit.bottom);
+      if (!chosenTop) {
+        toast.error("Sélectionne un haut ou une robe pour commencer.");
+        return;
+      }
+      if (String(chosenTop.type).toLowerCase() === 'robe' && chosenBottom) {
+        toast.error("Une robe forme déjà une tenue complète. Retire le bas sélectionné.");
+        return;
+      }
+      if (String(chosenTop.type).toLowerCase() !== 'robe' && !chosenBottom) {
+        toast.error("Ajoute un bas pour compléter la tenue.");
+        return;
+      }
+    }
     const ids = (stylistMode === 'ai'
       ? [currentOutfit?.top?.id, currentOutfit?.bottom?.id, currentOutfit?.layer?.id, currentOutfit?.feet?.id, currentOutfit?.head?.id]
       : Object.values(manualOutfit)).filter(Boolean);
@@ -659,10 +675,10 @@ function App() {
 
   const manualItems = useMemo(() => ({
     head: items.filter(i => ['Bonnet', 'Casquette', 'Chapeau', 'Bob'].includes(i.type)),
-    top: items.filter(i => ['T-shirt', 'Chemise', 'Pull', 'Sweat', 'Top / Blouse', 'Robe'].includes(i.type)),
+    top: items.filter(i => ['T-shirt', 'Chemise', 'Pull', 'Sweat', 'Top / Blouse', 'Blouse', 'Robe', 'Gilet'].includes(i.type)),
     layer: items.filter(i => ['Veste', 'Manteau', 'Cardigan', 'Blazer', 'Trench'].includes(i.type)),
     bottom: items.filter(i => ['Pantalon', 'Short', 'Jogging', 'Jean', 'Jupe', 'Legging', 'Chino'].includes(i.type)),
-    feet: items.filter(i => ['Baskets', 'Bottes', 'Sandales', 'Talons', 'Ville'].includes(i.type)),
+    feet: items.filter(i => ['Baskets', 'Basket', 'Bottes', 'Sandales', 'Talons', 'Ville', 'Chaussures'].includes(i.type)),
     bag: items.filter(i => ['Sac'].includes(i.type))
   }), [items])
 
@@ -729,7 +745,7 @@ function App() {
             </motion.div>
           )}
 
-          {view === 'dashboard' && <DashboardView key="dashboard" items={items} loading={loading} activeFilter={activeFilter} setActiveFilter={setActiveFilter} filteredItems={filteredItems} onSelectItem={(item) => setSelectedItem(item)} onAddClick={() => setView('add-choice')} weather={weather} weatherLoading={weatherLoading} onWeatherClick={() => { setCityModalMode('home'); setShowCityModal(true); }} />}
+          {view === 'dashboard' && <DashboardView key="dashboard" items={items} loading={loading} activeFilter={activeFilter} setActiveFilter={setActiveFilter} filteredItems={filteredItems} onSelectItem={(item) => { setSelectedItem(item); setEditForm({ ...item }); setIsEditing(false); }} onAddClick={() => setView('add-choice')} weather={weather} weatherLoading={weatherLoading} onWeatherClick={() => { setCityModalMode('home'); setShowCityModal(true); }} />}
           {view === 'stylist' && <StylistView key="stylist" stylistMode={stylistMode} setStylistMode={setStylistMode} currentOutfit={currentOutfit} outfitLoading={outfitLoading} handleGenerateOutfitRequest={handleGenerateOutfitRequest} handleValidateOutfit={handleValidateOutfit} manualItems={manualItems} manualOutfit={manualOutfit} setManualOutfit={setManualOutfit} loading={loading} lockedOutfit={lockedOutfit} setLockedOutfit={setLockedOutfit} />}
           {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={setTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} setSuitcaseChecked={setSuitcaseChecked} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
           {view === 'settings' && <SettingsView key="settings" profile={{id: uid, name, email, avatar_url: avatarUrl}} name={name} setName={setName} email={email} setEmail={setEmail} avatarPreview={avatarPreview} avatarInputRef={avatarInputRef} setTempAvatarFile={setTempAvatarFile} setAvatarPreview={setAvatarPreview} handleUpdateProfile={handleUpdateProfile} handleLogout={handleLogout} setShowDeleteModal={setShowDeleteModal} subscriptionTier={subscriptionTier} items={items} aiGensRemaining={aiGensRemaining} />}
@@ -741,7 +757,7 @@ function App() {
 
         <CityModal show={showCityModal} onClose={() => setShowCityModal(false)} title={cityModalMode === 'home' ? "Localiser" : "Destination"} citySearch={citySearch} setCitySearch={handleCitySearch} cityResults={cityResults} onSelectCity={handleSelectCity} />
         
-        <EditModal show={!!selectedItem} onClose={() => { setSelectedItem(null); setIsEditing(false); }} isEditing={isEditing} setIsEditing={setIsEditing} editForm={editForm || selectedItem || {}} setEditForm={setEditForm} handleUpdateItem={handleUpdateItem} handleDeleteItem={handleDeleteItem} loading={loading} />
+        <EditModal show={!!selectedItem} onClose={() => { setSelectedItem(null); setEditForm(null); setIsEditing(false); }} isEditing={isEditing} setIsEditing={setIsEditing} editForm={editForm || selectedItem || {}} setEditForm={setEditForm} handleUpdateItem={handleUpdateItem} handleDeleteItem={handleDeleteItem} loading={loading} />
         
         <DeleteModal show={showDeleteModal} onClose={() => setShowDeleteModal(false)} onConfirm={handleDeleteAccount} loading={loading} />
       </div>
