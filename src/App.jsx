@@ -70,7 +70,8 @@ function App() {
   const [suitcase, setSuitcase] = useState([])
   const [suitcaseLoading, setSuitcaseLoading] = useState(false)
   
-  const [stylistMode, setStylistMode] = useState('ai') 
+  const [stylistMode, setStylistMode] = useState('ai')
+  const [stylistOccasion, setStylistOccasion] = useState('Quotidien') 
   const [currentOutfit, setCurrentOutfit] = useState(null)
   const [manualOutfit, setManualOutfit] = useState({ head: null, top: null, layer: null, bottom: null, feet: null, bag: null })
   const [outfitLoading, setOutfitLoading] = useState(false)
@@ -100,8 +101,8 @@ function App() {
       result = result.filter(item => {
         if (activeFilter === 'Mes Hauts') return item.main_category === 'Haut'
         if (activeFilter === 'Mes Bas') return item.main_category === 'Bas'
-        if (activeFilter === 'Extérieur') return item.type === 'Veste' || item.type === 'Manteau'
-        if (activeFilter === 'Robe') return item.type === 'Robe' || item.type === 'Jupe'
+        if (activeFilter === 'Extérieur') return ['Veste', 'Manteau', 'Cardigan', 'Blazer', 'Parka', 'Trench'].includes(item.type)
+        if (activeFilter === 'Robe') return item.type === 'Robe'
         const activities = String(item.activity || '').split(/[,;|]/).map(value => value.trim());
         if (activeFilter === 'Sport') return activities.includes('Sport');
         if (activeFilter === 'Soirée') return activities.includes('Soirée');
@@ -305,7 +306,7 @@ function App() {
     setStylistMode('ai');
     try {
       const currentWeather = weather || await getLocalWeather();
-      const result = await generateOutfit(items, currentWeather, lockedOutfit, currentOutfit);
+      const result = await generateOutfit(items, currentWeather, lockedOutfit, currentOutfit, stylistOccasion);
       const resolved = {
         top: findItemById(items, result.top_id),
         bottom: findItemById(items, result.bottom_id),
@@ -746,7 +747,7 @@ function App() {
           )}
 
           {view === 'dashboard' && <DashboardView key="dashboard" items={items} loading={loading} activeFilter={activeFilter} setActiveFilter={setActiveFilter} filteredItems={filteredItems} onSelectItem={(item) => { setSelectedItem(item); setEditForm({ ...item }); setIsEditing(false); }} onAddClick={() => setView('add-choice')} weather={weather} weatherLoading={weatherLoading} onWeatherClick={() => { setCityModalMode('home'); setShowCityModal(true); }} />}
-          {view === 'stylist' && <StylistView key="stylist" stylistMode={stylistMode} setStylistMode={setStylistMode} currentOutfit={currentOutfit} outfitLoading={outfitLoading} handleGenerateOutfitRequest={handleGenerateOutfitRequest} handleValidateOutfit={handleValidateOutfit} manualItems={manualItems} manualOutfit={manualOutfit} setManualOutfit={setManualOutfit} loading={loading} lockedOutfit={lockedOutfit} setLockedOutfit={setLockedOutfit} />}
+          {view === 'stylist' && <StylistView key="stylist" stylistMode={stylistMode} setStylistMode={setStylistMode} stylistOccasion={stylistOccasion} setStylistOccasion={setStylistOccasion} currentOutfit={currentOutfit} outfitLoading={outfitLoading} handleGenerateOutfitRequest={handleGenerateOutfitRequest} handleValidateOutfit={handleValidateOutfit} manualItems={manualItems} manualOutfit={manualOutfit} setManualOutfit={setManualOutfit} loading={loading} lockedOutfit={lockedOutfit} setLockedOutfit={setLockedOutfit} />}
           {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={setTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} setSuitcaseChecked={setSuitcaseChecked} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
           {view === 'settings' && <SettingsView key="settings" profile={{id: uid, name, email, avatar_url: avatarUrl}} name={name} setName={setName} email={email} setEmail={setEmail} avatarPreview={avatarPreview} avatarInputRef={avatarInputRef} setTempAvatarFile={setTempAvatarFile} setAvatarPreview={setAvatarPreview} handleUpdateProfile={handleUpdateProfile} handleLogout={handleLogout} setShowDeleteModal={setShowDeleteModal} subscriptionTier={subscriptionTier} items={items} aiGensRemaining={aiGensRemaining} />}
           {['add-choice', 'bulk-add', 'loading-ai', 'add-detail'].includes(view) && <AddClothingView key="add" view={view} setView={setView} fileInputRef={fileInputRef} galleryInputRef={galleryInputRef} handleFileChange={handleFileChange} onAnalyzeClothing={handleAnalyzeClothing} analysisLoading={analysisLoading} analysisApplied={analysisApplied} bulkItems={bulkItems} setBulkItems={setBulkItems} handleBulkAdd={handleBulkAdd} loading={loading} selectedImage={selectedImage} newItem={newItem} setNewItem={setNewItem} handleAddItem={handleAddItem} getIconForType={getIconForType} />}
