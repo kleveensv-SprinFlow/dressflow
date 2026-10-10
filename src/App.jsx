@@ -180,10 +180,20 @@ function App() {
   useEffect(() => { 
     checkUserSession().catch((err) => toast.error(err.message || 'Erreur de session.'));
     CapApp.addListener('appUrlOpen', data => {
-      const url = new URL(data.url.replace('#', '?')); const accessToken = url.searchParams.get('access_token'); const refreshToken = url.searchParams.get('refresh_token')
-      if (accessToken && refreshToken) supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+      const url = new URL(data.url.replace('#', '?'));
+      const accessToken = url.searchParams.get('access_token');
+      const refreshToken = url.searchParams.get('refresh_token');
+      const recoveryType = url.searchParams.get('type') === 'recovery';
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (recoveryType) setView('reset-password');
+      }
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setView('reset-password');
+        return;
+      }
       if (session?.user) {
         setEmail(session.user.email || '');
         queueMicrotask(() => { syncProfile(session.user).catch((err) => toast.error(err.message || 'Erreur de profil.')); });
@@ -363,6 +373,25 @@ function App() {
     }
   };
 
+  const handlePasswordUpdate = async () => {
+    if (password.length < 8) { toast.error("Le mot de passe doit contenir au moins 8 caractères."); return; }
+    if (password !== confirmPassword) { toast.error("Les mots de passe ne correspondent pas."); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setPassword('');
+      setConfirmPassword('');
+      if (data.user) await syncProfile(data.user);
+      setView('dashboard');
+      toast.success("Mot de passe modifié.");
+    } catch (err) {
+      toast.error(err.message || "Modification impossible.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files); if (files.length === 0) return
     setLoading(true)
@@ -497,6 +526,18 @@ function App() {
               <button className="btn-primary" onClick={handleLogin} disabled={loading} style={{ marginTop: '0.5rem' }}>Se connecter</button>
               <button className="btn-secondary" onClick={handlePasswordReset} disabled={loading} style={{ marginTop: '0.75rem', width: '100%' }}>Mot de passe oublié ?</button>
               <button onClick={() => setView('splash')} className="btn-secondary" style={{ border: 'none', background: 'none' }}>Retour</button>
+            </motion.div>
+          )}
+
+          {view === 'reset-password' && (
+            <motion.div key="reset-password" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
+              <h2 className="title" style={{ textAlign: 'center' }}>Nouveau mot de passe</h2>
+              <p className="subtitle" style={{ textAlign: 'center', margin: '1rem 0' }}>Choisis un mot de passe d'au moins 8 caractères.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', margin: '1.5rem 0' }}>
+                <input type="password" placeholder="Nouveau mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+                <input type="password" placeholder="Confirmer le mot de passe" className="input-styled" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+              </div>
+              <button className="btn-primary" onClick={handlePasswordUpdate} disabled={loading}>Enregistrer le mot de passe</button>
             </motion.div>
           )}
 
