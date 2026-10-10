@@ -83,27 +83,37 @@ const detectDominantColor = async (img) => {
 const mapRGBToColorName = (r, g, b) => {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
+  const spread = max - min;
+
+  // These are coarse suggestions: lighting, shadows and patterned fabric can skew them.
   if (max < 42) return 'Noir';
   if (min > 225) return 'Blanc';
-  if (max - min < 22) return max > 190 ? 'Gris' : 'Gris';
-
-  if (r > 150 && g > 75 && b < 100 && r - b > 55) {
-    if (g > 105) return 'Orange';
-    return r > 205 ? 'Rouge' : 'Bordeaux';
+  if (spread < 18) {
+    if (max > 205) return 'Blanc';
+    if (max < 75) return 'Noir';
+    return max > 160 ? 'Argent' : 'Gris';
   }
-  if (r > 170 && g > 125 && b < 110) return r - g < 45 ? 'Moutarde' : 'Camel';
-  if (r > 185 && g > 165 && b > 130 && Math.abs(r - g) < 45) return 'Beige';
-  if (r > 170 && b > 115 && g < 150) return r - g > 55 ? 'Rose' : 'Violet';
-  if (r > 125 && b > 125 && g < 130) return 'Lilas';
-  if (g > r * 1.12 && g > b * 0.9) return g > 140 ? 'Vert Sapin' : 'Kaki';
-  if (b > r * 1.15 && b > g * 1.04) return b > 155 ? 'Bleu Ciel' : 'Marine';
-  if (r > 125 && g > 90 && b < 100) return 'Marron';
-  return 'Gris';
-};
 
-const getSeasonFromType = (type) => {
-  if (['T-shirt', 'Short', 'Robe', 'Jupe', 'Sandales'].includes(type)) return 'Été';
-  if (['Manteau', 'Pull', 'Bonnet', 'Bottes'].includes(type)) return 'Hiver';
-  if (['Pantalon', 'Jean', 'Veste', 'Baskets', 'Chemise'].includes(type)) return 'Printemps';
-  return 'Toutes saisons';
+  if (r > 135 && r > g * 1.35 && r > b * 1.3) {
+    if (g > 90 && r - g < 95) return 'Orange';
+    if (r > 205 && g < 70 && b < 80) return 'Rouge';
+    return r > 175 && g > 65 ? 'Bordeaux' : 'Rouge';
+  }
+  if (r > 180 && g > 125 && b > 145 && r - g < 85) return 'Rose Poudré';
+  if (r > 180 && g > 90 && b > 105 && r > g * 1.05) return 'Rose';
+  if (r > 175 && g > 145 && b > 85 && b < 155) {
+    if (Math.abs(r - g) < 25 && b < 125) return 'Moutarde';
+    return 'Camel';
+  }
+  if (r > 185 && g > 165 && b < 105) return 'Jaune';
+  if (r > 125 && g > 80 && b < 85 && r - b > 40) return 'Marron';
+  if (r > 120 && g > 65 && b < 80 && r - b > 35) return 'Terracotta';
+  if (r > 100 && b > 115 && g < 155) {
+    if (b > r * 1.1 && b > g * 1.1) return g > 75 ? 'Lilas' : 'Violet';
+    return 'Bordeaux';
+  }
+  if (g > r * 1.12 && g > b * 0.9) return g > 145 && r < 115 ? 'Vert Sapin' : 'Kaki';
+  if (b > r * 1.15 && b > g * 1.02) return b > 165 && r < 125 ? 'Bleu Ciel' : 'Marine';
+  if (r > 155 && g > 125 && b > 50 && r - b > 60) return 'Or';
+  return 'Gris';
 };
