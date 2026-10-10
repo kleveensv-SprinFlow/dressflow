@@ -213,16 +213,17 @@ export const generateOutfit = async (items, weather = {}, lockedValues = {}, pre
 
   if (topLock) tops = [topLock];
   if (bottomLock) bottoms = [bottomLock];
-  if (layerLock && !layers.some(item => item.id === layerLock.id)) throw new Error('La pièce verrouillée ne peut pas être utilisée comme couche extérieure.');
   if (topLock && isOnePiece(topLock) && bottomLock) throw new Error('Une robe est déjà une tenue complète : déverrouille le bas pour la conserver.');
+  if (bottomLock) tops = tops.filter(item => !isOnePiece(item));
   if (tops.length === 0) throw new Error('Ajoute un haut (T-shirt, chemise, pull…) ou une robe à ton dressing.');
+  if (layerLock && !layers.some(item => String(item.id) === String(layerLock.id))) throw new Error('La pièce verrouillée ne peut pas être utilisée comme couche extérieure.');
   const hasOnePiece = tops.some(isOnePiece);
   if (bottoms.length === 0 && !hasOnePiece) throw new Error('Ajoute un bas (jean, pantalon, jupe…) pour composer une tenue complète.');
 
   const topChoices = shortlist(tops, topLock);
   const bottomChoices = shortlist(bottoms.filter(item => !isOnePiece(item)), bottomLock);
   const layerChoices = layerLock ? [layerLock] : temp <= 8
-    ? shortlist(layers, null, 8)
+    ? [null, ...shortlist(layers, null, 8)]
     : temp <= 18
       ? [null, ...shortlist(layers, null, 6)]
       : [null, ...(temp <= 22 ? shortlist(layers, null, 3) : [])];
