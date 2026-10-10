@@ -278,8 +278,21 @@ function App() {
 
   const handleDeleteItem = async () => {
     if (!selectedItem) return;
-    setLoading(true); await supabase.from('clothes').delete().eq('id', selectedItem.id); await fetchItems(uid); setSelectedItem(null); setLoading(false)
-    toast.success("Vêtement supprimé");
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('clothes').delete().eq('id', selectedItem.id);
+      if (error) throw error;
+      if (selectedItem.image_path) {
+        await supabase.storage.from('clothes-images').remove([selectedItem.image_path]);
+      }
+      await fetchItems(uid);
+      setSelectedItem(null);
+      toast.success("Vêtement supprimé");
+    } catch (err) {
+      toast.error(err.message || "Suppression impossible.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const handleUpdateItem = async () => {
@@ -424,6 +437,9 @@ function App() {
       }
       const { error: updateError } = await supabase.from('profiles').update({ name: name.trim(), avatar_url: finalAvatarPath }).eq('id', uid);
       if (updateError) throw updateError;
+      if (avatarPath && avatarPath !== finalAvatarPath) {
+        await supabase.storage.from('avatars').remove([avatarPath]).catch(() => {});
+      }
       setAvatarPath(finalAvatarPath);
       setAvatarUrl(finalAvatarPath ? await createPrivateUrl('avatars', finalAvatarPath) : null);
       setTempAvatarFile(null);
