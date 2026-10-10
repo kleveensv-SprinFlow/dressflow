@@ -220,16 +220,16 @@ export const generateOutfit = async (items, weather = {}, lockedValues = {}, pre
   const hasOnePiece = tops.some(isOnePiece);
   if (bottoms.length === 0 && !hasOnePiece) throw new Error('Ajoute un bas (jean, pantalon, jupe…) pour composer une tenue complète.');
 
-  const topChoices = shortlist(tops, topLock);
-  const bottomChoices = shortlist(bottoms.filter(item => !isOnePiece(item)), bottomLock);
+  const topChoices = shortlist(tops, topLock, 10);
+  const bottomChoices = shortlist(bottoms.filter(item => !isOnePiece(item)), bottomLock, 10);
   const layerChoices = layerLock ? [layerLock] : temp <= 8
-    ? [null, ...shortlist(layers, null, 8)]
+    ? [null, ...shortlist(layers, null, 5)]
     : temp <= 18
       ? [null, ...shortlist(layers, null, 6)]
       : [null, ...(temp <= 22 ? shortlist(layers, null, 3) : [])];
-  const shoeChoices = shoeLock ? [shoeLock] : shoes.length ? shortlist(shoes, null, 8) : [null];
+  const shoeChoices = shoeLock ? [shoeLock] : shoes.length ? shortlist(shoes, null, 6) : [null];
   const shouldConsiderHeadwear = temp <= 5 || temp >= 27;
-  const headChoices = headLock ? [headLock] : shouldConsiderHeadwear ? [null, ...shortlist(heads, null, 4)] : [null];
+  const headChoices = headLock ? [headLock] : shouldConsiderHeadwear ? [null, ...shortlist(heads, null, 3)] : [null];
   const previousIds = new Set(
     [previousOutfit?.top, previousOutfit?.bottom, previousOutfit?.layer, previousOutfit?.feet, previousOutfit?.head]
       .map(item => item?.id).filter(Boolean).map(String)
