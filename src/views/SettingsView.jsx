@@ -55,7 +55,7 @@ const SettingsView = ({
               </div>
             </div>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '5px' }}><span>Générations IA</span><span>{subscriptionTier === 'premium' ? '∞' : aiGensRemaining}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '5px' }}><span>Compositions restantes</span><span>{subscriptionTier === 'premium' ? '∞' : aiGensRemaining}</span></div>
               <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.05)', borderRadius: '4px' }}>
                 <div style={{ width: `${subscriptionTier === 'premium' ? 100 : (aiGensRemaining / 5) * 100}%`, height: '100%', background: '#7c3aed', borderRadius: '4px' }}></div>
               </div>
