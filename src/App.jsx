@@ -31,7 +31,7 @@ import AddClothingView from './views/AddClothingView'
 import { generatePackingList } from './utils/packing'
 import { 
   MAIN_CATEGORIES, CATEGORY_HIERARCHY, getIconForType, 
-  ALL_SEASONS, ALL_ACTIVITIES, formatUID, findItemById 
+  ALL_SEASONS, ALL_ACTIVITIES, ALL_COLORS, formatUID, findItemById 
 } from './utils/helpers.jsx'
 
 function App() {
