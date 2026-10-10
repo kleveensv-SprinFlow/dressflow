@@ -1,6 +1,6 @@
 const TOP_TYPES = new Set(['T-shirt', 'Chemise', 'Pull', 'Sweat', 'Top / Blouse', 'Blouse', 'Robe', 'Gilet']);
 const BOTTOM_TYPES = new Set(['Pantalon', 'Short', 'Jogging', 'Jean', 'Jupe', 'Legging', 'Chino']);
-const LAYER_TYPES = new Set(['Veste', 'Manteau', 'Cardigan', 'Blazer', 'Parka', 'Trench', 'Sweat']);
+const LAYER_TYPES = new Set(['Veste', 'Manteau', 'Cardigan', 'Blazer', 'Parka', 'Trench']);
 const SHOE_TYPES = new Set(['Baskets', 'Basket', 'Bottes', 'Sandales', 'Talons', 'Ville', 'Chaussures']);
 const HEAD_TYPES = new Set(['Bonnet', 'Casquette', 'Chapeau', 'Bob']);
 const NEUTRALS = new Set(['blanc', 'blanc casse', 'noir', 'gris', 'beige', 'marine', 'marron', 'camel', 'kaki', 'ecru', 'creme']);
