@@ -2,14 +2,36 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Home, Plane, Plus, Wand2, User } from 'lucide-react';
 
-const BottomNav = ({ activeTab, onTabChange }) => (
-  <div className="bottom-nav">
-    <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => onTabChange('dashboard')}><Home size={22} /><span>Dressing</span></motion.div>
-    <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${activeTab === 'trip' ? 'active' : ''}`} onClick={() => onTabChange('trip')}><Plane size={22} /><span>Voyage</span></motion.div>
-    <motion.div whileTap={{ scale: 0.9 }} className="nav-item" onClick={() => onTabChange('add-choice')}><div className="add-nav-btn"><Plus size={30} /></div><span>Ajouter</span></motion.div>
-    <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${activeTab === 'stylist' ? 'active' : ''}`} onClick={() => onTabChange('stylist')}><Wand2 size={22} /><span>Styliste</span></motion.div>
-    <motion.div whileTap={{ scale: 0.9 }} className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => onTabChange('settings')}><User size={22} /><span>Profil</span></motion.div>
-  </div>
-);
+const BottomNav = ({ activeTab, onTabChange }) => {
+  const tabs = [
+    { id: 'dashboard', label: 'Dressing', icon: Home },
+    { id: 'trip', label: 'Voyage', icon: Plane },
+    { id: 'add-choice', label: 'Ajouter', icon: Plus, primary: true },
+    { id: 'stylist', label: 'Styliste', icon: Wand2 },
+    { id: 'settings', label: 'Profil', icon: User }
+  ];
+
+  return (
+    <nav className="bottom-nav" aria-label="Navigation principale">
+      {tabs.map(({ id, label, icon: Icon, primary }) => {
+        const active = activeTab === id || (id === 'add-choice' && ['add-choice', 'add-detail', 'bulk-add', 'loading-ai'].includes(activeTab));
+        return (
+          <motion.button
+            type="button"
+            key={id}
+            whileTap={{ scale: 0.96 }}
+            className={`nav-item ${active ? 'active' : ''} ${primary ? 'nav-item-add' : ''}`}
+            onClick={() => onTabChange(id)}
+            aria-current={active && !primary ? 'page' : undefined}
+            aria-label={label}
+          >
+            {primary ? <span className="add-nav-btn"><Icon size={28} /></span> : <Icon size={22} />}
+            <span>{label}</span>
+          </motion.button>
+        );
+      })}
+    </nav>
+  );
+};
 
 export default BottomNav;
