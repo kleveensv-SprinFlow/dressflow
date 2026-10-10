@@ -31,7 +31,8 @@ alter table public.profiles enable row level security;
 alter table public.clothes enable row level security;
 revoke all on public.profiles from anon, authenticated;
 revoke all on public.clothes from anon, authenticated;
-grant select, update on public.profiles to authenticated;
+grant select on public.profiles to authenticated;
+grant update (name, avatar_url) on public.profiles to authenticated;
 grant select, insert, update, delete on public.clothes to authenticated;
 
 drop policy if exists "Dressflow users can view own profile" on public.profiles;
