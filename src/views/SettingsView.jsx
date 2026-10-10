@@ -62,7 +62,7 @@ const SettingsView = ({
             </div>
           </div>
           {subscriptionTier !== 'premium' && (
-            <motion.button whileTap={{ scale: 0.98 }} className="btn-primary" style={{ width: '100%', marginTop: '1.5rem', background: 'linear-gradient(135deg, #7c3aed, var(--primary))' }}>Passer au Premium ✨</motion.button>
+            <button type="button" className="btn-secondary" disabled style={{ width: '100%', marginTop: '1.5rem', opacity: 0.7, cursor: 'not-allowed' }} aria-disabled="true">Premium bientôt disponible</button>
           )}
         </div>
 
