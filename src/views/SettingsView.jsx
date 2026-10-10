@@ -29,7 +29,7 @@ const SettingsView = ({
       <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', marginBottom: '1.5rem' }}>
         <div style={{ position: 'relative', width: '100px', height: '100px', margin: '0 auto 1.5rem' }}>
           <div style={{ width: '100%', height: '100%', borderRadius: '35px', overflow: 'hidden', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-            {avatarPreview ? <img src={avatarPreview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <UserCircle size={50} />}
+            {(avatarPreview || profile?.avatar_url) ? <img src={avatarPreview || profile.avatar_url} alt="Avatar du profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <UserCircle size={50} />}
           </div>
           <motion.button whileTap={{ scale: 0.9 }} onClick={() => avatarInputRef.current.click()} style={{ position: 'absolute', bottom: '-5px', right: '-5px', width: '35px', height: '35px', borderRadius: '12px', background: 'white', border: 'none', boxShadow: '0 5px 15px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}><Camera size={18} /></motion.button>
           <input type="file" ref={avatarInputRef} hidden accept="image/*" onChange={(e) => { const file = e.target.files[0]; if (file) { setTempAvatarFile(file); setAvatarPreview(URL.createObjectURL(file)); } }} />
