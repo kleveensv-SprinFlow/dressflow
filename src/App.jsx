@@ -483,7 +483,6 @@ function App() {
                 <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>CONFIRMER LE MOT DE PASSE</label><input type="password" className="input-styled" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" /></div>
                 <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>STYLE</label><div style={{ display: 'flex', gap: '1rem' }}><button type="button" onClick={() => setGender('female')} className={'btn-secondary ' + (gender === 'female' ? 'active' : '')} style={{ flex: 1 }}>👩 Femme</button><button type="button" onClick={() => setGender('male')} className={'btn-secondary ' + (gender === 'male' ? 'active' : '')} style={{ flex: 1 }}>👨 Homme</button></div></div>
                 <button onClick={handleRegister} className="btn-primary" disabled={loading}>Créer mon compte</button>
-                <button onClick={handleRegister} className="btn-primary" disabled={loading}>Commencer ✨</button>
               </div>
             </motion.div>
           )}
