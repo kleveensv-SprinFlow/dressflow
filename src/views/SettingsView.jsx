@@ -39,7 +39,7 @@ const SettingsView = ({
         
         {profile?.email && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '6px 15px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 800, marginTop: '1rem' }}>
-            <ShieldCheck size={14} /> Compte sécurisé ({profile.email})
+            <Mail size={14} /> Adresse associée ({profile.email})
           </div>
         )}
       </div>
