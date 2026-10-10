@@ -179,7 +179,7 @@ function App() {
 
   useEffect(() => { 
     checkUserSession().catch((err) => toast.error(err.message || 'Erreur de session.'));
-    CapApp.addListener('appUrlOpen', data => {
+    CapApp.addListener('appUrlOpen', async data => {
       const url = new URL(data.url.replace('#', '?'));
       const accessToken = url.searchParams.get('access_token');
       const refreshToken = url.searchParams.get('refresh_token');
