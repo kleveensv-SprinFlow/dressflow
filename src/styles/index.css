@@ -42,6 +42,35 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+button {
+  font: inherit;
+  color: inherit;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 body {
   font-family: var(--font-main);
   background: var(--bg-gradient);
@@ -277,6 +306,13 @@ body {
 }
 
 .item-card {
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  color: var(--text-main);
+  font: inherit;
+  padding: 0;
+  border: none;
   background: var(--glass-bg);
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -351,6 +387,11 @@ body {
 }
 
 .nav-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  min-height: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -364,6 +405,10 @@ body {
 
 .nav-item.active {
   color: var(--primary);
+}
+
+.nav-item-add {
+  gap: 2px;
 }
 
 .add-nav-btn {
@@ -708,7 +753,7 @@ body {
   justify-content: center;
 }
 
-.choice-item label {
+.choice-item .choice-label {
   font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -730,7 +775,10 @@ body {
 
 .color-circle {
   flex: 0 0 36px;
+  width: 36px;
   height: 36px;
+  padding: 0;
+  appearance: none;
   border-radius: 50%;
   border: 2px solid white;
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
