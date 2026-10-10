@@ -76,6 +76,7 @@ const StylistView = ({
       </div>
 
       {stylistMode === 'ai' ? (
+        <>
         <section className="glass-card" style={{ padding: '1rem', marginBottom: '1rem' }} aria-label="Occasion de la tenue">
           <h2 className="title" style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Pour quelle occasion ?</h2>
           <div className="filter-scroll" role="group" aria-label="Choisir une occasion">
@@ -183,6 +184,7 @@ const StylistView = ({
             </div>
           )}
         </motion.div>
+        </>
       ) : (
         <div style={{ marginTop: '1rem', paddingBottom: '3rem' }}>
           <CategorySlider title="Tête" items={manualItems.head} selectedId={manualOutfit.head} onSelect={(id) => setManualOutfit({ ...manualOutfit, head: id })} />
