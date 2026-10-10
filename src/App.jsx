@@ -13,7 +13,8 @@ import toast, { Toaster } from 'react-hot-toast'
 // Styles & Services
 import './styles/index.css'
 import { supabase } from './lib/supabase'
-import { generateOutfit } from './services/ai'
+import { analyzeClothing } from './services/ai'
+import { generateOutfit } from './services/styleEngine.js'
 import { getLocalWeather, searchCity } from './services/weather'
 
 // Components & Views
@@ -49,7 +50,7 @@ function App() {
   const [subscriptionTier, setSubscriptionTier] = useState('free')
   const [aiGensRemaining, setAiGensRemaining] = useState(5)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [lockedOutfit, setLockedOutfit] = useState({ top: null, bottom: null, layer: null })
+  const [lockedOutfit, setLockedOutfit] = useState({ top: null, bottom: null, layer: null, feet: null, head: null })
   const [suitcaseChecked, setSuitcaseChecked] = useState([])
   
   const [weather, setWeather] = useState(null)
@@ -79,12 +80,15 @@ function App() {
   const [editForm, setEditForm] = useState(null)
 
   const [bulkItems, setBulkItems] = useState([])
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisApplied, setAnalysisApplied] = useState(false)
   const [tempAvatarFile, setTempAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(null)
 
   const avatarInputRef = useRef(null)
   const searchTimeoutRef = useRef(null)
   const fileInputRef = useRef(null)
+  const galleryInputRef = useRef(null)
 
   const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
@@ -98,12 +102,13 @@ function App() {
         if (activeFilter === 'Mes Bas') return item.main_category === 'Bas'
         if (activeFilter === 'Extérieur') return item.type === 'Veste' || item.type === 'Manteau'
         if (activeFilter === 'Robe') return item.type === 'Robe' || item.type === 'Jupe'
-        if (activeFilter === 'Sport') return item.activity === 'Sport'
-        if (activeFilter === 'Soirée') return item.activity === 'Soirée'
+        const activities = String(item.activity || '').split(/[,;|]/).map(value => value.trim());
+        if (activeFilter === 'Sport') return activities.includes('Sport');
+        if (activeFilter === 'Soirée') return activities.includes('Soirée');
         return true
       })
     }
-    const order = ["Haut", "Bas", "Chaussures", "Chapeau"]
+    const order = ["Haut", "Bas", "Chaussures", "Chapeau", "Accessoires"]
     return result.sort((a, b) => order.indexOf(a.main_category) - order.indexOf(b.main_category))
   }, [items, activeFilter])
 
@@ -166,7 +171,15 @@ function App() {
 
   const initWeather = async (lat = null, lon = null, cityName = null) => {
     setWeatherLoading(true)
-    try { const data = await getLocalWeather(lat, lon); if (cityName) data.city = cityName; setWeather(data) } catch (err) { toast.error("Position introuvable.") } finally { setWeatherLoading(false) }
+    try {
+      const data = await getLocalWeather(lat, lon);
+      if (cityName) data.city = cityName;
+      setWeather(data);
+    } catch (err) {
+      toast.error(err.message || "Position introuvable.");
+    } finally {
+      setWeatherLoading(false);
+    }
   }
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
@@ -242,44 +255,90 @@ function App() {
   }
 
   const handleGenerateSuitcase = async () => {
-    if (!travelData.lat) { toast.error("Choisis une destination !"); return; }
-    setSuitcaseLoading(true)
+    if (travelData.lat == null || travelData.lon == null) {
+      toast.error("Choisis une destination avant de générer la valise.");
+      return;
+    }
+    const startDate = parseISO(travelData.startDate);
+    const endDate = parseISO(travelData.endDate);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) {
+      toast.error("La date de retour doit être le même jour ou après le départ.");
+      return;
+    }
+    if (items.length === 0) {
+      toast.error("Ajoute d’abord quelques vêtements à ton dressing.");
+      return;
+    }
+    setSuitcaseLoading(true);
     try {
-      const destWeather = await getLocalWeather(travelData.lat, travelData.lon)
-      const duration = differenceInDays(parseISO(travelData.endDate), parseISO(travelData.startDate)) + 1
-      const list = generatePackingList(items, destWeather, duration)
-      setSuitcase(list)
-      toast.success("Valise prête ! ✈️");
-    } catch (err) { toast.error("Erreur météo") } finally { setSuitcaseLoading(false) }
+      const destWeather = await getLocalWeather(travelData.lat, travelData.lon);
+      const duration = differenceInDays(endDate, startDate) + 1;
+      const list = generatePackingList(items, destWeather, duration);
+      if (list.length === 0) throw new Error("Aucune pièce exploitable n’a été trouvée dans ton dressing.");
+      setSuitcase(list);
+      setSuitcaseChecked([]);
+      toast.success("Valise prête.");
+    } catch (err) {
+      toast.error(err.message || "Impossible de préparer la valise.");
+    } finally {
+      setSuitcaseLoading(false);
+    }
   }
 
   const handleGenerateOutfitRequest = async () => {
-    if (items.length < 3) { toast.error("Ajoute plus d'habits !"); return; }
-    if (subscriptionTier === 'free' && aiGensRemaining <= 0) { toast.error("Limite IA atteinte 💎"); setView('settings'); return; }
-    setOutfitLoading(true); setStylistMode('ai'); 
-    try { 
-      const res = await generateOutfit(items, weather || await getLocalWeather(), lockedOutfit); 
+    if (subscriptionTier === 'free' && aiGensRemaining <= 0) {
+      toast.error("Limite de compositions atteinte. Consulte ton plan dans Profil.");
+      setView('settings');
+      return;
+    }
+    setOutfitLoading(true);
+    setStylistMode('ai');
+    try {
+      const currentWeather = weather || await getLocalWeather();
+      const result = await generateOutfit(items, currentWeather, lockedOutfit, currentOutfit);
       const resolved = {
-        top: findItemById(items, res.top_id),
-        bottom: findItemById(items, res.bottom_id),
-        layer: findItemById(items, res.layer_id),
-        explanation: res.explanation
+        top: findItemById(items, result.top_id),
+        bottom: findItemById(items, result.bottom_id),
+        layer: findItemById(items, result.layer_id),
+        feet: findItemById(items, result.feet_id),
+        head: findItemById(items, result.head_id),
+        color_harmony: result.color_harmony,
+        explanation: result.explanation
       };
       setCurrentOutfit(resolved);
-      if (subscriptionTier === 'free') setAiGensRemaining(prev => prev - 1);
-      toast.success("Look généré ! ✨");
-    } catch (err) { toast.error("Erreur") } finally { setOutfitLoading(false) }
+      if (subscriptionTier === 'free') setAiGensRemaining(prev => Math.max(0, prev - 1));
+      toast.success("Composition prête. Vérifie les suggestions.");
+    } catch (err) {
+      toast.error(err.message || "Impossible de composer une tenue.");
+    } finally {
+      setOutfitLoading(false);
+    }
   }
 
   const handleValidateOutfit = async () => {
-    const ids = stylistMode === 'ai' 
-      ? [currentOutfit.top?.id, currentOutfit.bottom?.id, currentOutfit.layer?.id].filter(id => id) 
-      : Object.values(manualOutfit).filter(id => id)
-    if (ids.length === 0) return
-    setLoading(true); await Haptics.impact({ style: ImpactStyle.Heavy }); confetti({ particleCount: 200, spread: 90, origin: { y: 0.5 } })
-    await supabase.from('clothes').update({ last_worn_date: new Date().toISOString() }).in('id', ids)
-    await fetchItems(uid); setView('dashboard'); setLoading(false)
-    toast.success("Superbe look ! 🔥");
+    const ids = (stylistMode === 'ai'
+      ? [currentOutfit?.top?.id, currentOutfit?.bottom?.id, currentOutfit?.layer?.id, currentOutfit?.feet?.id, currentOutfit?.head?.id]
+      : Object.values(manualOutfit)).filter(Boolean);
+    if (ids.length === 0) {
+      toast.error("Sélectionne au moins une pièce avant de valider.");
+      return;
+    }
+    setLoading(true);
+    try {
+      try { await Haptics.impact({ style: ImpactStyle.Heavy }); } catch { /* Web preview has no native haptics. */ }
+      const { error } = await supabase.from('clothes')
+        .update({ last_worn_date: new Date().toISOString() })
+        .in('id', ids);
+      if (error) throw error;
+      try { confetti({ particleCount: 110, spread: 75, origin: { y: 0.5 } }); } catch { /* Decorative only. */ }
+      await fetchItems(uid);
+      setView('dashboard');
+      toast.success("Tenue enregistrée dans l’historique.");
+    } catch (err) {
+      toast.error(err.message || "Impossible d’enregistrer cette tenue.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const handleCitySearch = (val) => {
@@ -399,22 +458,96 @@ function App() {
     }
   };
 
-  const handleFileChange = async (e) => {
-    const files = Array.from(e.target.files); if (files.length === 0) return
-    setLoading(true)
-    if (files.length === 1) {
-      setTempFile(files[0]); setSelectedImage(URL.createObjectURL(files[0]))
-      setNewItem({ main_category: null, type: '', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
-      setView('add-detail')
-    } else {
-      const initialBulk = files.map(f => ({ file: f, preview: URL.createObjectURL(f), main_category: 'Haut', type: 'T-shirt', color: 'Blanc', season: ['Été', 'Hiver', 'Printemps', 'Automne'], activity: ['Quotidien'], icon: '👕' }))
-      setBulkItems(initialBulk); setView('bulk-add')
+  const handleAnalyzeClothing = async () => {
+    if (!tempFile || analysisLoading) return;
+    setAnalysisLoading(true);
+    try {
+      const suggestion = await analyzeClothing(tempFile);
+      const matchedCategory = suggestion.type
+        ? Object.entries(CATEGORY_HIERARCHY).find(([, types]) => types.includes(suggestion.type))
+        : null;
+      setNewItem(previous => ({
+        ...previous,
+        ...(matchedCategory ? { main_category: matchedCategory[0], type: suggestion.type, icon: getIconForType(suggestion.type) } : {}),
+        ...(suggestion.color && ALL_COLORS.includes(suggestion.color) ? { color: suggestion.color } : {}),
+        ...(ALL_SEASONS.includes(suggestion.season) ? { season: [suggestion.season] } : {}),
+        ...(ALL_ACTIVITIES.includes(suggestion.activity) ? { activity: [suggestion.activity] } : {})
+      }));
+      setAnalysisApplied(true);
+      if (!matchedCategory) {
+        toast("Couleur et détails partiellement suggérés. Le type reste à choisir manuellement.");
+      } else {
+        toast.success("Suggestions ajoutées. Vérifie-les avant d’enregistrer.");
+      }
+    } catch (err) {
+      toast.error(err.message || "Analyse indisponible. Saisis les informations manuellement.");
+    } finally {
+      setAnalysisLoading(false);
     }
-    setLoading(false)
+  };
+
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    if (files.some(file => !file.type.startsWith('image/'))) {
+      toast.error("Sélectionne uniquement des images.");
+      return;
+    }
+
+    const freeSlots = subscriptionTier === 'premium' ? files.length : Math.max(0, 50 - items.length);
+    if (freeSlots === 0) {
+      toast.error("Limite du dressing gratuit atteinte.");
+      setView('settings');
+      return;
+    }
+    const acceptedFiles = files.slice(0, freeSlots);
+    if (acceptedFiles.length < files.length) {
+      toast(`Seulement ${acceptedFiles.length} pièce(s) peuvent encore être ajoutées avec le plan gratuit.`);
+    }
+
+    setLoading(true);
+    setAnalysisApplied(false);
+    try {
+      if (acceptedFiles.length === 1) {
+        const file = acceptedFiles[0];
+        setTempFile(file);
+        setSelectedImage(URL.createObjectURL(file));
+        setNewItem({ main_category: null, type: '', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' });
+        setView('add-detail');
+      } else {
+        const initialBulk = acceptedFiles.map(file => ({
+          file,
+          preview: URL.createObjectURL(file),
+          main_category: 'Haut',
+          type: 'T-shirt',
+          color: 'Blanc',
+          season: ['Été', 'Hiver', 'Printemps', 'Automne'],
+          activity: ['Quotidien'],
+          icon: '👕'
+        }));
+        setBulkItems(initialBulk);
+        setView('bulk-add');
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   const handleBulkAdd = async () => {
-    setLoading(true)
+    if (!uid) {
+      toast.error("Connecte-toi avant d’ajouter des vêtements.");
+      return;
+    }
+    if (subscriptionTier === 'free' && items.length + bulkItems.length > 50) {
+      toast.error("Cette sélection dépasse la limite de 50 pièces du plan gratuit.");
+      return;
+    }
+    if (bulkItems.some(item => !item.main_category || !item.type || !item.color)) {
+      toast.error("Vérifie la catégorie, le type et la couleur de chaque pièce.");
+      return;
+    }
+    setLoading(true);
     try {
       for (const item of bulkItems) {
         const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -440,9 +573,20 @@ function App() {
   }
 
   const handleAddItem = async () => {
-    if (!uid || !tempFile) return; 
-    if (subscriptionTier === 'free' && items.length >= 25) { toast.error("Limite atteinte 💎"); setView('settings'); return; }
-    setLoading(true)
+    if (!uid || !tempFile) {
+      toast.error("Choisis une photo et vérifie les détails du vêtement.");
+      return;
+    }
+    if (subscriptionTier === 'free' && items.length >= 50) {
+      toast.error("Limite du dressing gratuit atteinte.");
+      setView('settings');
+      return;
+    }
+    if (!newItem.main_category || !newItem.type || !newItem.color) {
+      toast.error("Renseigne la catégorie, le type et la couleur.");
+      return;
+    }
+    setLoading(true);
     try {
       const safeName = tempFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
@@ -486,9 +630,9 @@ function App() {
 
   const manualItems = useMemo(() => ({
     head: items.filter(i => ['Bonnet', 'Casquette', 'Chapeau', 'Bob'].includes(i.type)),
-    top: items.filter(i => ['T-shirt', 'Chemise', 'Pull', 'Sweat', 'Top / Blouse'].includes(i.type)),
-    layer: items.filter(i => ['Veste', 'Manteau'].includes(i.type)),
-    bottom: items.filter(i => ['Pantalon', 'Short', 'Jogging', 'Jean', 'Jupe', 'Legging'].includes(i.type)),
+    top: items.filter(i => ['T-shirt', 'Chemise', 'Pull', 'Sweat', 'Top / Blouse', 'Robe'].includes(i.type)),
+    layer: items.filter(i => ['Veste', 'Manteau', 'Cardigan', 'Blazer', 'Trench'].includes(i.type)),
+    bottom: items.filter(i => ['Pantalon', 'Short', 'Jogging', 'Jean', 'Jupe', 'Legging', 'Chino'].includes(i.type)),
     feet: items.filter(i => ['Baskets', 'Bottes', 'Sandales', 'Talons', 'Ville'].includes(i.type)),
     bag: items.filter(i => ['Sac'].includes(i.type))
   }), [items])
@@ -560,7 +704,7 @@ function App() {
           {view === 'stylist' && <StylistView key="stylist" stylistMode={stylistMode} setStylistMode={setStylistMode} currentOutfit={currentOutfit} outfitLoading={outfitLoading} handleGenerateOutfitRequest={handleGenerateOutfitRequest} handleValidateOutfit={handleValidateOutfit} manualItems={manualItems} manualOutfit={manualOutfit} setManualOutfit={setManualOutfit} loading={loading} lockedOutfit={lockedOutfit} setLockedOutfit={setLockedOutfit} />}
           {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={setTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} setSuitcaseChecked={setSuitcaseChecked} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
           {view === 'settings' && <SettingsView key="settings" profile={{id: uid, name, email, avatar_url: avatarUrl}} name={name} setName={setName} email={email} setEmail={setEmail} avatarPreview={avatarPreview} avatarInputRef={avatarInputRef} setTempAvatarFile={setTempAvatarFile} setAvatarPreview={setAvatarPreview} handleUpdateProfile={handleUpdateProfile} handleLogout={handleLogout} setShowDeleteModal={setShowDeleteModal} subscriptionTier={subscriptionTier} items={items} aiGensRemaining={aiGensRemaining} />}
-          {['add-choice', 'bulk-add', 'loading-ai', 'add-detail'].includes(view) && <AddClothingView key="add" view={view} setView={setView} fileInputRef={fileInputRef} handleFileChange={handleFileChange} bulkItems={bulkItems} setBulkItems={setBulkItems} handleBulkAdd={handleBulkAdd} loading={loading} selectedImage={selectedImage} newItem={newItem} setNewItem={setNewItem} handleAddItem={handleAddItem} getIconForType={getIconForType} />}
+          {['add-choice', 'bulk-add', 'loading-ai', 'add-detail'].includes(view) && <AddClothingView key="add" view={view} setView={setView} fileInputRef={fileInputRef} galleryInputRef={galleryInputRef} handleFileChange={handleFileChange} onAnalyzeClothing={handleAnalyzeClothing} analysisLoading={analysisLoading} analysisApplied={analysisApplied} bulkItems={bulkItems} setBulkItems={setBulkItems} handleBulkAdd={handleBulkAdd} loading={loading} selectedImage={selectedImage} newItem={newItem} setNewItem={setNewItem} handleAddItem={handleAddItem} getIconForType={getIconForType} />}
 
         </AnimatePresence>
 
@@ -568,7 +712,7 @@ function App() {
 
         <CityModal show={showCityModal} onClose={() => setShowCityModal(false)} title={cityModalMode === 'home' ? "Localiser" : "Destination"} citySearch={citySearch} setCitySearch={handleCitySearch} cityResults={cityResults} onSelectCity={handleSelectCity} />
         
-        <EditModal show={!!selectedItem} isEditing={isEditing} setIsEditing={setIsEditing} editForm={editForm || selectedItem || {}} setEditForm={setEditForm} handleUpdateItem={handleUpdateItem} handleDeleteItem={handleDeleteItem} loading={loading} />
+        <EditModal show={!!selectedItem} onClose={() => { setSelectedItem(null); setIsEditing(false); }} isEditing={isEditing} setIsEditing={setIsEditing} editForm={editForm || selectedItem || {}} setEditForm={setEditForm} handleUpdateItem={handleUpdateItem} handleDeleteItem={handleDeleteItem} loading={loading} />
         
         <DeleteModal show={showDeleteModal} onClose={() => setShowDeleteModal(false)} onConfirm={handleDeleteAccount} loading={loading} />
       </div>
