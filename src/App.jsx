@@ -42,6 +42,7 @@ function App() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [avatarUrl, setAvatarUrl] = useState(null)
   const [avatarPath, setAvatarPath] = useState(null)
+  const passwordRecoveryRef = useRef(false)
   const [uid, setUid] = useState('') 
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -185,17 +186,22 @@ function App() {
       const refreshToken = url.searchParams.get('refresh_token');
       const recoveryType = url.searchParams.get('type') === 'recovery';
       if (accessToken && refreshToken) {
+        if (recoveryType) {
+          passwordRecoveryRef.current = true;
+          setView('reset-password');
+        }
         await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        if (recoveryType) setView('reset-password');
       }
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        passwordRecoveryRef.current = true;
         setView('reset-password');
         return;
       }
       if (session?.user) {
         setEmail(session.user.email || '');
+        if (passwordRecoveryRef.current) return;
         queueMicrotask(() => { syncProfile(session.user).catch((err) => toast.error(err.message || 'Erreur de profil.')); });
       } else if (event === 'SIGNED_OUT') {
         setUid(''); setItems([]); setAvatarUrl(null); setAvatarPath(null);
@@ -380,6 +386,7 @@ function App() {
     try {
       const { data, error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      passwordRecoveryRef.current = false;
       setPassword('');
       setConfirmPassword('');
       if (data.user) await syncProfile(data.user);
