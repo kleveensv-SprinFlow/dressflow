@@ -62,3 +62,22 @@ test('invalid locks are rejected instead of producing an empty outfit', async ()
     /n’est plus disponible/
   );
 });
+
+
+test('outfit generation is deterministic for identical inputs', async () => {
+  const first = await generateOutfit(wardrobe, { temp: 16, code: 3 });
+  const second = await generateOutfit(wardrobe, { temp: 16, code: 3 });
+  assert.deepEqual(second, first);
+});
+
+test('occasion fit prefers items tagged for the selected occasion', async () => {
+  const occasionWardrobe = [
+    makeItem('top-work', 'Chemise', 'Blanc', 'Haut', { activity: ['Travail'], last_worn_date: '2026-10-01T00:00:00.000Z' }),
+    makeItem('top-sport', 'T-shirt', 'Noir', 'Haut', { activity: ['Sport'], last_worn_date: '2026-09-01T00:00:00.000Z' }),
+    makeItem('bottom-work', 'Pantalon', 'Marine', 'Bas', { activity: ['Travail'] }),
+    makeItem('bottom-sport', 'Jogging', 'Gris', 'Bas', { activity: ['Sport'] })
+  ];
+  const workLook = await generateOutfit(occasionWardrobe, { temp: 20 }, {}, null, 'Travail');
+  assert.equal(workLook.top_id, 'top-work');
+  assert.equal(workLook.bottom_id, 'bottom-work');
+});
