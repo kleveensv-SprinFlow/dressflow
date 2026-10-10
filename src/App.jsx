@@ -41,12 +41,10 @@ function App() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [avatarUrl, setAvatarUrl] = useState(null)
-  const [isEmailConfirmed, setIsEmailConfirmed] = useState(false)
+  const [avatarPath, setAvatarPath] = useState(null)
   const [uid, setUid] = useState('') 
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-  const [inputCode, setInputCode] = useState('')
-  const [loginMode, setLoginMode] = useState('code')
   const [subscriptionTier, setSubscriptionTier] = useState('free')
   const [aiGensRemaining, setAiGensRemaining] = useState(5)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -108,27 +106,62 @@ function App() {
     return result.sort((a, b) => order.indexOf(a.main_category) - order.indexOf(b.main_category))
   }, [items, activeFilter])
 
-  const generateRandomUID = () => { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let res = ''; for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res }
+  const createPrivateUrl = async (bucket, path) => {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
+    if (error) throw error;
+    return data.signedUrl;
+  };
 
   const fetchItems = async (profileId) => {
-    setLoading(true); const { data } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false })
-    setItems(data || []); setLoading(false)
-  }
-
-  const syncProfile = async (userEmail) => {
-    const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).single()
-    if (profile) {
-      setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email); setAvatarUrl(profile.avatar_url);
-      setSubscriptionTier(profile.subscription_tier || 'free');
-      localStorage.setItem('dressflow_uid', profile.id);
-      await fetchItems(profile.id); if (['splash', 'login', 'register', 'complete-profile', 'success'].includes(view)) setView('dashboard');
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('clothes').select('*').eq('profile_id', profileId).order('created_at', { ascending: false });
+      if (error) throw error;
+      const signedItems = await Promise.all((data || []).map(async (item) => {
+        if (!item.image_url) return { ...item, image_path: null };
+        try {
+          return { ...item, image_path: item.image_url, image_url: await createPrivateUrl('clothes-images', item.image_url) };
+        } catch {
+          return { ...item, image_path: item.image_url, image_url: null };
+        }
+      }));
+      setItems(signedItems);
+    } catch (err) {
+      toast.error(err.message || "Impossible de charger le dressing.");
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const syncProfile = async (user) => {
+    if (!user?.id) return;
+    const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (error) throw error;
+    if (!profile) {
+      toast.error("Profil introuvable. Déconnecte-toi puis reconnecte-toi.");
+      return;
+    }
+    setUid(profile.id);
+    setName(profile.name || user.user_metadata?.name || '');
+    setGender(profile.gender || 'female');
+    setEmail(user.email || profile.email || '');
+    setAvatarPath(profile.avatar_url || null);
+    setAvatarUrl(profile.avatar_url ? await createPrivateUrl('avatars', profile.avatar_url).catch(() => null) : null);
+    setSubscriptionTier(profile.subscription_tier || 'free');
+    await fetchItems(profile.id);
+    if (['splash', 'login', 'register', 'complete-profile', 'success'].includes(view)) setView('dashboard');
+  };
 
   const checkUserSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user?.email) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
-  }
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (session?.user) {
+      setEmail(session.user.email || '');
+      await syncProfile(session.user);
+    }
+  };
 
   const initWeather = async (lat = null, lon = null, cityName = null) => {
     setWeatherLoading(true)
@@ -145,26 +178,19 @@ function App() {
   useEffect(() => { localStorage.setItem('suitcase', JSON.stringify(suitcase)); localStorage.setItem('travelData', JSON.stringify(travelData)) }, [suitcase, travelData])
 
   useEffect(() => { 
-    checkUserSession(); 
+    checkUserSession().catch((err) => toast.error(err.message || 'Erreur de session.'));
     CapApp.addListener('appUrlOpen', data => {
       const url = new URL(data.url.replace('#', '?')); const accessToken = url.searchParams.get('access_token'); const refreshToken = url.searchParams.get('refresh_token')
       if (accessToken && refreshToken) supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) { setIsEmailConfirmed(true); setEmail(session.user.email); await syncProfile(session.user.email); }
-    })
-    
-    const savedUid = localStorage.getItem('dressflow_uid')
-    if (savedUid && !uid) {
-      (async () => {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', savedUid).single()
-        if (profile) {
-          setUid(profile.id); setName(profile.name); setGender(profile.gender); setEmail(profile.email || '');
-          setSubscriptionTier(profile.subscription_tier || 'free'); setAvatarUrl(profile.avatar_url);
-          await fetchItems(profile.id); setView('dashboard');
-        }
-      })()
-    }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setEmail(session.user.email || '');
+        queueMicrotask(() => { syncProfile(session.user).catch((err) => toast.error(err.message || 'Erreur de profil.')); });
+      } else if (event === 'SIGNED_OUT') {
+        setUid(''); setItems([]); setAvatarUrl(null); setAvatarPath(null);
+      }
+    });
 
     return () => subscription.unsubscribe()
   }, [])
@@ -175,7 +201,7 @@ function App() {
     setLoading(true); try {
       await supabase.auth.signOut(); 
       localStorage.removeItem('dressflow_uid'); localStorage.removeItem('suitcase'); localStorage.removeItem('travelData');
-      setUid(''); setName(''); setEmail(''); setItems([]); setIsEmailConfirmed(false); setAvatarUrl(null);
+      setUid(''); setName(''); setEmail(''); setItems([]); setAvatarUrl(null); setAvatarPath(null);
       setSuitcase([]); setCurrentOutfit(null); setWeather(null); 
       setTravelData({ destination: '', lat: null, lon: null, startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd') });
       setView('splash');
@@ -184,12 +210,19 @@ function App() {
   }
   
   const handleDeleteAccount = async () => {
-    setLoading(true); try {
-      const { error } = await supabase.from('profiles').delete().eq('id', uid)
+    setLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
       if (error) throw error;
-      await supabase.auth.signOut(); setUid(''); setName(''); setView('splash'); setShowDeleteModal(false);
-      toast.success("Compte supprimé 🗑️");
-    } catch (err) { toast.error(err.message) } finally { setLoading(false) }
+      await supabase.auth.signOut();
+      setUid(''); setName(''); setEmail(''); setItems([]); setAvatarUrl(null); setAvatarPath(null);
+      setView('splash'); setShowDeleteModal(false);
+      toast.success("Compte et données Dressflow supprimés.");
+    } catch (err) {
+      toast.error(err.message || "Impossible de supprimer le compte.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const handleGenerateSuitcase = async () => {
@@ -262,27 +295,60 @@ function App() {
   }
 
   const handleRegister = async () => {
-    if (!name) { toast.error("Prénom requis !"); return; }
-    setLoading(true); try { 
-      const newUid = generateRandomUID(); 
-      await supabase.from('profiles').insert([{ id: newUid, name, gender }]); 
-      setUid(newUid); localStorage.setItem('dressflow_uid', newUid); setView('success') 
-      toast.success("Compte créé !");
-    } catch (err) { toast.error(err.message) } finally { setLoading(false) }
-  }
+    if (!name.trim()) { toast.error("Prénom requis."); return; }
+    if (!email.trim()) { toast.error("Adresse email requise."); return; }
+    if (password.length < 8) { toast.error("Le mot de passe doit contenir au moins 8 caractères."); return; }
+    if (password !== confirmPassword) { toast.error("Les mots de passe ne correspondent pas."); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: { data: { name: name.trim(), gender } }
+      });
+      if (error) throw error;
+      if (data.session && data.user) {
+        await syncProfile(data.user);
+        toast.success("Compte créé.");
+      } else {
+        setView('login');
+        toast.success("Compte créé. Vérifie ta boîte mail pour confirmer ton adresse.");
+      }
+    } catch (err) {
+      toast.error(err.message || "Création du compte impossible.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
-    setLoading(true); try {
-      if (loginMode === 'code') {
-        const cleanCode = inputCode.replace(/[^A-Z0-9]/g, ''); const { data: profile } = await supabase.from('profiles').select('*').eq('id', cleanCode).single()
-        if (!profile) throw new Error("Code invalide"); 
-        setUid(profile.id); localStorage.setItem('dressflow_uid', profile.id);
-        setName(profile.name); setGender(profile.gender); setEmail(profile.email || ''); setAvatarUrl(profile.avatar_url); 
-        setSubscriptionTier(profile.subscription_tier || 'free'); await fetchItems(profile.id); setView('dashboard')
-      } else { const { error: authErr } = await supabase.auth.signInWithPassword({ email, password }); if (authErr) throw authErr; await syncProfile(email); }
-      toast.success("Bon retour ! 👋");
-    } catch (err) { toast.error(err.message) } finally { setLoading(false) }
-  }
+    if (!email.trim() || !password) { toast.error("Email et mot de passe requis."); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      if (error) throw error;
+      if (data.user) await syncProfile(data.user);
+      toast.success("Connexion réussie.");
+    } catch (err) {
+      toast.error(err.message || "Connexion impossible.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email.trim()) { toast.error("Saisis d'abord ton adresse email."); return; }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.origin });
+      if (error) throw error;
+      toast.success("Lien envoyé si cette adresse existe.");
+    } catch (err) {
+      toast.error(err.message || "Envoi du lien impossible.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files); if (files.length === 0) return
@@ -302,10 +368,22 @@ function App() {
     setLoading(true)
     try {
       for (const item of bulkItems) {
-        const fileName = `${uid}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}.jpg`
-        await supabase.storage.from('clothes-images').upload(fileName, item.file)
-        const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
-        await supabase.from('clothes').insert([{ profile_id: uid, main_category: item.main_category, type: item.type, color: item.color, season: Array.isArray(item.season) ? item.season.join(', ') : item.season, activity: Array.isArray(item.activity) ? item.activity.join(', ') : item.activity, icon: item.icon, image_url: publicUrl, last_worn_date: new Date().toISOString() }])
+        const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
+        const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, item.file, { contentType: item.file.type, upsert: false });
+        if (uploadError) throw uploadError;
+        const { error: insertError } = await supabase.from('clothes').insert([{
+          profile_id: uid,
+          main_category: item.main_category,
+          type: item.type,
+          color: item.color,
+          season: Array.isArray(item.season) ? item.season.join(', ') : item.season,
+          activity: Array.isArray(item.activity) ? item.activity.join(', ') : item.activity,
+          icon: item.icon,
+          image_url: fileName,
+          last_worn_date: new Date().toISOString()
+        }]);
+        if (insertError) throw insertError;
       }
       await fetchItems(uid); setView('dashboard'); setBulkItems([]);
       toast.success("Importation terminée ! 📦");
@@ -317,9 +395,19 @@ function App() {
     if (subscriptionTier === 'free' && items.length >= 25) { toast.error("Limite atteinte 💎"); setView('settings'); return; }
     setLoading(true)
     try {
-      const fileName = `${uid}-${Date.now()}.jpg`; await supabase.storage.from('clothes-images').upload(fileName, tempFile)
-      const { data: { publicUrl } } = supabase.storage.from('clothes-images').getPublicUrl(fileName)
-      await supabase.from('clothes').insert([{ profile_id: uid, ...newItem, image_url: publicUrl, last_worn_date: new Date().toISOString() }])
+      const safeName = tempFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
+      const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, tempFile, { contentType: tempFile.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { error: insertError } = await supabase.from('clothes').insert([{
+        profile_id: uid,
+        ...newItem,
+        season: Array.isArray(newItem.season) ? newItem.season.join(', ') : newItem.season,
+        activity: Array.isArray(newItem.activity) ? newItem.activity.join(', ') : newItem.activity,
+        image_url: fileName,
+        last_worn_date: new Date().toISOString()
+      }]);
+      if (insertError) throw insertError;
       await fetchItems(uid); setView('dashboard'); setSelectedImage(null); setTempFile(null)
       toast.success("Ajouté avec succès ! ✨");
     } catch (err) { toast.error(err.message) } finally { setLoading(false) }
@@ -327,9 +415,19 @@ function App() {
 
   const handleUpdateProfile = async () => {
     setLoading(true); try {
-      let finalAvatarUrl = avatarUrl;
-      if (tempAvatarFile) { const fileName = `avatar-${uid}-${Date.now()}.jpg`; await supabase.storage.from('avatars').upload(fileName, tempAvatarFile); const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName); finalAvatarUrl = publicUrl; }
-      await supabase.from('profiles').update({ name, avatar_url: finalAvatarUrl }).eq('id', uid); setAvatarUrl(finalAvatarUrl);
+      let finalAvatarPath = avatarPath;
+      if (tempAvatarFile) {
+        const safeName = tempAvatarFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        finalAvatarPath = uid + '/avatar-' + crypto.randomUUID() + '-' + safeName;
+        const { error: uploadError } = await supabase.storage.from('avatars').upload(finalAvatarPath, tempAvatarFile, { contentType: tempAvatarFile.type, upsert: false });
+        if (uploadError) throw uploadError;
+      }
+      const { error: updateError } = await supabase.from('profiles').update({ name: name.trim(), avatar_url: finalAvatarPath }).eq('id', uid);
+      if (updateError) throw updateError;
+      setAvatarPath(finalAvatarPath);
+      setAvatarUrl(finalAvatarPath ? await createPrivateUrl('avatars', finalAvatarPath) : null);
+      setTempAvatarFile(null);
+      setAvatarPreview(null);
       toast.success("Profil mis à jour ! ✅");
     } catch (err) { toast.error(err.message) } finally { setLoading(false) }
   }
@@ -363,8 +461,12 @@ function App() {
             <motion.div key="register" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
               <div style={{ marginBottom: '2rem', textAlign: 'center' }}><div style={{ background: 'var(--primary)', color: 'white', width: '60px', height: '60px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}><UserCircle size={35} /></div><h2 className="title">Créer mon dressing</h2></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>PRÉNOM</label><input type="text" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} /></div>
-                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>STYLE</label><div style={{ display: 'flex', gap: '1rem' }}><button onClick={() => setGender('female')} className={`btn-secondary ${gender === 'female' ? 'active' : ''}`} style={{ flex: 1 }}>👩 Femme</button><button onClick={() => setGender('male')} className={`btn-secondary ${gender === 'male' ? 'active' : ''}`} style={{ flex: 1 }}>👨 Homme</button></div></div>
+                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>PRÉNOM</label><input type="text" className="input-styled" value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" /></div>
+                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>EMAIL</label><input type="email" className="input-styled" placeholder="vous@exemple.fr" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></div>
+                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>MOT DE PASSE (8 CARACTÈRES MINIMUM)</label><input type="password" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></div>
+                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>CONFIRMER LE MOT DE PASSE</label><input type="password" className="input-styled" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" /></div>
+                <div><label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 800 }}>STYLE</label><div style={{ display: 'flex', gap: '1rem' }}><button type="button" onClick={() => setGender('female')} className={'btn-secondary ' + (gender === 'female' ? 'active' : '')} style={{ flex: 1 }}>👩 Femme</button><button type="button" onClick={() => setGender('male')} className={'btn-secondary ' + (gender === 'male' ? 'active' : '')} style={{ flex: 1 }}>👨 Homme</button></div></div>
+                <button onClick={handleRegister} className="btn-primary" disabled={loading}>Créer mon compte</button>
                 <button onClick={handleRegister} className="btn-primary" disabled={loading}>Commencer ✨</button>
               </div>
             </motion.div>
@@ -373,9 +475,12 @@ function App() {
           {view === 'login' && (
             <motion.div key="login" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="glass-card my-auto" style={{ padding: '2.5rem' }}>
               <h2 className="title" style={{ textAlign: 'center' }}>Bon retour ! 👋</h2>
-              <div className="filter-bar" style={{ margin: '1.5rem 0' }}><button className={`filter-pill ${loginMode === 'code' ? 'active' : ''}`} onClick={() => setLoginMode('code')}>Code</button><button className={`filter-pill ${loginMode === 'email' ? 'active' : ''}`} onClick={() => setLoginMode('email')}>Email</button></div>
-              {loginMode === 'code' ? <input type="text" placeholder="XXXX - XXXX" className="input-styled" style={{ textAlign: 'center', fontSize: '1.5rem' }} value={formatUID(inputCode)} onChange={(e) => setInputCode(e.target.value.toUpperCase())} maxLength={11} /> : <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}><input type="email" placeholder="Email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} /><input type="password" placeholder="Pass" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} /></div>}
-              <button className="btn-primary" onClick={handleLogin} disabled={loading} style={{ marginTop: '1.5rem' }}>Se connecter</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', margin: '1.5rem 0' }}>
+                <input type="email" placeholder="Adresse email" className="input-styled" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+                <input type="password" placeholder="Mot de passe" className="input-styled" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+              </div>
+              <button className="btn-primary" onClick={handleLogin} disabled={loading} style={{ marginTop: '0.5rem' }}>Se connecter</button>
+              <button className="btn-secondary" onClick={handlePasswordReset} disabled={loading} style={{ marginTop: '0.75rem', width: '100%' }}>Mot de passe oublié ?</button>
               <button onClick={() => setView('splash')} className="btn-secondary" style={{ border: 'none', background: 'none' }}>Retour</button>
             </motion.div>
           )}
