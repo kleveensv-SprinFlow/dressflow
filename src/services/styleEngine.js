@@ -251,7 +251,10 @@ export const generateOutfit = async (items, weather = {}, lockedValues = {}, pre
             if (layer) roles.set(layer.id, 'layer');
             if (shoe) roles.set(shoe.id, 'shoes');
             if (head) roles.set(head.id, 'head');
-            const score = outfitScore(pieces, roles, temp, rainy, previousIds);
+            const outerwearBonus = layer
+              ? (temp <= 8 ? 20 : temp <= 14 ? 13 : temp <= 18 ? 7 : temp <= 22 ? 2 : -6)
+              : (temp <= 8 && layers.length > 0 ? -14 : temp <= 14 && layers.length > 0 ? -8 : temp <= 18 && layers.length > 0 ? -4 : 0);
+            const score = outfitScore(pieces, roles, temp, rainy, previousIds) + outerwearBonus;
             if (score > bestScore) {
               best = { top, bottom, layer, shoe, head, pieces };
               bestScore = score;
