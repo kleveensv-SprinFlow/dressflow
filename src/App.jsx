@@ -156,6 +156,9 @@ function App() {
     setAvatarPath(profile.avatar_url || null);
     setAvatarUrl(profile.avatar_url ? await createPrivateUrl('avatars', profile.avatar_url).catch(() => null) : null);
     setSubscriptionTier(profile.subscription_tier || 'free');
+    const quotaKey = 'dressflow_ai_remaining_' + profile.id;
+    const savedQuota = Number.parseInt(localStorage.getItem(quotaKey) ?? '5', 10);
+    setAiGensRemaining(Number.isFinite(savedQuota) ? Math.max(0, savedQuota) : 5);
     await fetchItems(profile.id);
     if (['splash', 'login', 'register', 'complete-profile', 'success'].includes(view)) setView('dashboard');
   };
@@ -190,6 +193,13 @@ function App() {
   }, [])
 
   useEffect(() => { localStorage.setItem('suitcase', JSON.stringify(suitcase)); localStorage.setItem('travelData', JSON.stringify(travelData)) }, [suitcase, travelData])
+
+  // Local convenience quota only; production entitlements must also be enforced server-side.
+  useEffect(() => {
+    if (uid && subscriptionTier === 'free') {
+      localStorage.setItem('dressflow_ai_remaining_' + uid, String(aiGensRemaining));
+    }
+  }, [uid, subscriptionTier, aiGensRemaining]);
 
   useEffect(() => { 
     checkUserSession().catch((err) => toast.error(err.message || 'Erreur de session.'));
@@ -548,6 +558,7 @@ function App() {
       return;
     }
     setLoading(true);
+    let completed = 0;
     try {
       for (const item of bulkItems) {
         const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -565,11 +576,24 @@ function App() {
           image_url: fileName,
           last_worn_date: new Date().toISOString()
         }]);
-        if (insertError) throw insertError;
+        if (insertError) {
+          await supabase.storage.from('clothes-images').remove([fileName]);
+          throw insertError;
+        }
+        completed += 1;
       }
       await fetchItems(uid); setView('dashboard'); setBulkItems([]);
-      toast.success("Importation terminée ! 📦");
-    } catch (err) { toast.error(err.message) } finally { setLoading(false) }
+      toast.success("Importation terminée !");
+    } catch (err) {
+      if (completed > 0) {
+        await fetchItems(uid);
+        setView('dashboard');
+        setBulkItems([]);
+        toast.error(completed + " pièce(s) ajoutée(s), mais l’import s’est arrêté : " + (err.message || 'erreur inconnue'));
+      } else {
+        toast.error(err.message || "Importation impossible.");
+      }
+    } finally { setLoading(false) }
   }
 
   const handleAddItem = async () => {
@@ -587,9 +611,11 @@ function App() {
       return;
     }
     setLoading(true);
+    let uploadedPath = null;
     try {
       const safeName = tempFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
+      uploadedPath = fileName;
       const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, tempFile, { contentType: tempFile.type, upsert: false });
       if (uploadError) throw uploadError;
       const { error: insertError } = await supabase.from('clothes').insert([{
@@ -602,8 +628,11 @@ function App() {
       }]);
       if (insertError) throw insertError;
       await fetchItems(uid); setView('dashboard'); setSelectedImage(null); setTempFile(null)
-      toast.success("Ajouté avec succès ! ✨");
-    } catch (err) { toast.error(err.message) } finally { setLoading(false) }
+      toast.success("Ajouté avec succès !");
+    } catch (err) {
+      if (uploadedPath) await supabase.storage.from('clothes-images').remove([uploadedPath]).catch(() => {});
+      toast.error(err.message || "Ajout impossible.");
+    } finally { setLoading(false) }
   }
 
   const handleUpdateProfile = async () => {
