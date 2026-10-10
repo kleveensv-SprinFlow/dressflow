@@ -20,10 +20,10 @@ const TravelView = ({
       </header>
       
       <div className="glass-card" style={{ padding: '1.5rem', borderRadius: '32px', boxShadow: '0 15px 40px rgba(0,0,0,0.08)', marginBottom: '2rem' }}>
-        <div onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.2rem', background: '#f8f9fa', borderRadius: '20px', marginBottom: '1rem', cursor: 'pointer', border: '1px solid rgba(0,0,0,0.05)' }}>
+        <button type="button" aria-label="Choisir la destination" onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.2rem', background: '#f8f9fa', borderRadius: '20px', marginBottom: '1rem', cursor: 'pointer', border: '1px solid rgba(0,0,0,0.05)', width: '100%', textAlign: 'left', color: 'inherit' }}>
           <MapPin size={20} color="var(--primary)" />
           <div style={{ flex: 1 }}><div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>DESTINATION</div><div style={{ fontWeight: 800 }}>{travelData.destination || "Où pars-tu ?"}</div></div>
-        </div>
+        </button>
         
         <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 140px', padding: '0.8rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)', minWidth: 0 }}>
