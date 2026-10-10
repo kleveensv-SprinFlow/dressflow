@@ -39,7 +39,7 @@ const SettingsView = ({
         
         {profile?.email && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '6px 15px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 800, marginTop: '1rem' }}>
-            <ShieldCheck size={14} /> Compte sécurisé ({profile.email})
+            <Mail size={14} /> Adresse associée ({profile.email})
           </div>
         )}
       </div>
@@ -55,14 +55,14 @@ const SettingsView = ({
               </div>
             </div>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '5px' }}><span>Générations IA</span><span>{subscriptionTier === 'premium' ? '∞' : aiGensRemaining}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '5px' }}><span>Compositions restantes</span><span>{subscriptionTier === 'premium' ? '∞' : aiGensRemaining}</span></div>
               <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.05)', borderRadius: '4px' }}>
                 <div style={{ width: `${subscriptionTier === 'premium' ? 100 : (aiGensRemaining / 5) * 100}%`, height: '100%', background: '#7c3aed', borderRadius: '4px' }}></div>
               </div>
             </div>
           </div>
           {subscriptionTier !== 'premium' && (
-            <motion.button whileTap={{ scale: 0.98 }} className="btn-primary" style={{ width: '100%', marginTop: '1.5rem', background: 'linear-gradient(135deg, #7c3aed, var(--primary))' }}>Passer au Premium ✨</motion.button>
+            <button type="button" className="btn-secondary" disabled style={{ width: '100%', marginTop: '1.5rem', opacity: 0.7, cursor: 'not-allowed' }} aria-disabled="true">Premium bientôt disponible</button>
           )}
         </div>
 

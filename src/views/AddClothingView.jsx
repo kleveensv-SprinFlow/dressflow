@@ -8,7 +8,11 @@ const AddClothingView = ({
   view,
   setView,
   fileInputRef,
+  galleryInputRef,
   handleFileChange,
+  onAnalyzeClothing,
+  analysisLoading,
+  analysisApplied,
   bulkItems,
   setBulkItems,
   handleBulkAdd,
@@ -24,15 +28,16 @@ const AddClothingView = ({
       <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: '2rem' }}>
         <header style={{ textAlign: 'center' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Ajouter une pièce</h2><p className="subtitle">Choisissez votre méthode d'importation</p></header>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-          <motion.div whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => fileInputRef.current.click()} style={{ border: '2px dashed var(--primary)' }}>
+          <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed var(--primary)', cursor: 'pointer' }}>
             <div style={{ background: 'var(--primary)', color: 'white', padding: '20px', borderRadius: '25px' }}><Camera size={35} /></div>
             <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--primary)' }}>PHOTO</div>
-          </motion.div>
-          <motion.div whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => fileInputRef.current.click()}>
+          </motion.button>
+          <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => galleryInputRef.current?.click()} style={{ cursor: 'pointer' }}>
             <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', padding: '20px', borderRadius: '25px' }}><ImageIcon size={35} /></div>
             <div style={{ fontWeight: 800, fontSize: '0.9rem', opacity: 0.6 }}>GALERIE</div>
-          </motion.div>
-          <input type="file" ref={fileInputRef} hidden accept="image/*" multiple onChange={handleFileChange} />
+          </motion.button>
+          <input type="file" ref={fileInputRef} hidden accept="image/*" capture="environment" onChange={handleFileChange} />
+          <input type="file" ref={galleryInputRef} hidden accept="image/*" multiple onChange={handleFileChange} />
         </div>
         <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ border: 'none', background: 'none' }} onClick={() => setView('dashboard')}>Annuler</motion.button>
       </motion.div>
@@ -121,8 +126,18 @@ const AddClothingView = ({
       <motion.div key="add-detail" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="dashboard-container" style={{ width: '100%', paddingBottom: '120px' }}>
         <header style={{ marginBottom: '1.5rem', textAlign: 'center' }}><h2 className="title" style={{ fontSize: '1.8rem' }}>Vérification</h2></header>
         <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: '35px', overflow: 'hidden', background: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', marginBottom: '2rem' }}>
-          <img src={selectedImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Preview" />
-          <div className="ai-badge"><Sparkles size={14} /> ANALYSÉ PAR IA</div>
+          <img src={selectedImage} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Aperçu du vêtement sélectionné" />
+          <div className="ai-badge">{analysisApplied ? 'SUGGESTIONS IA · À VÉRIFIER' : 'PHOTO SÉLECTIONNÉE'}</div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
+          <motion.button whileTap={{ scale: 0.98 }} className="btn-secondary" style={{ width: '100%' }} onClick={onAnalyzeClothing} disabled={analysisLoading || loading}>
+            {analysisLoading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+            {analysisLoading ? 'Analyse de l’image…' : analysisApplied ? 'Relancer les suggestions' : 'Suggérer les détails avec l’IA'}
+          </motion.button>
+          <p className="subtitle" style={{ fontSize: '0.76rem', lineHeight: 1.45, marginTop: '0.75rem', marginBottom: 0 }}>
+            La reconnaissance peut se tromper, notamment sur la couleur. Vérifie toujours les propositions avant d’enregistrer.
+          </p>
         </div>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>

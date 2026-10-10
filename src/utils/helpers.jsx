@@ -2,19 +2,20 @@ import React from 'react';
 import { Sun, Snowflake, CloudSun, Wind, Home, Footprints, Sparkles, Briefcase, Tag } from 'lucide-react';
 
 export const CATEGORY_HIERARCHY = {
-  "Haut": ["T-shirt", "Chemise", "Pull", "Sweat", "Veste", "Manteau", "Top / Blouse"],
+  "Haut": ["T-shirt", "Chemise", "Pull", "Sweat", "Veste", "Manteau", "Top / Blouse", "Robe"],
   "Bas": ["Pantalon", "Short", "Jogging", "Jean", "Jupe", "Legging"],
   "Chaussures": ["Baskets", "Bottes", "Sandales", "Talons", "Ville"],
-  "Chapeau": ["Casquette", "Bonnet", "Chapeau", "Bob"]
+  "Chapeau": ["Casquette", "Bonnet", "Chapeau", "Bob"],
+  "Accessoires": ["Sac"]
 };
 
 export const MAIN_CATEGORIES = Object.keys(CATEGORY_HIERARCHY);
 
 export const getIconForType = (type) => { 
   const icons = { 
-    'T-shirt': '👕', 'Chemise': '👔', 'Pull': '🧶', 'Sweat': '🧥', 'Veste': '🧥', 'Manteau': '🧥', 
-    'Pantalon': '👖', 'Short': '🩳', 'Jean': '👖', 'Jupe': '👗', 'Baskets': '👟', 'Bottes': '👢',
-    'Sandales': '👡', 'Ville': '👞', 'Casquette': '🧢', 'Bonnet': '👒'
+    'T-shirt': '👕', 'Chemise': '👔', 'Pull': '🧶', 'Sweat': '🧥', 'Veste': '🧥', 'Manteau': '🧥',
+    'Top / Blouse': '👚', 'Robe': '👗', 'Blouse': '👚', 'Pantalon': '👖', 'Short': '🩳', 'Jogging': '👖', 'Jean': '👖', 'Jupe': '👗', 'Legging': '👖',
+    'Baskets': '👟', 'Bottes': '👢', 'Sandales': '👡', 'Talons': '👠', 'Ville': '👞', 'Casquette': '🧢', 'Bonnet': '🧢', 'Chapeau': '👒', 'Bob': '🧢', 'Sac': '👜'
   }; 
   return icons[type] || '✨';
 };

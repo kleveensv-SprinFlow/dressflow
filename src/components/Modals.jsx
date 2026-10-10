@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, MapPinned, Info, Trash2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Search, MapPinned, Info, Trash2, AlertCircle, Loader2, Tag, Palette } from 'lucide-react';
 import { ChoiceSelector, SearchSelector, ColorPalette } from './UIElements';
 import { ALL_SEASONS, ALL_ACTIVITIES, getSeasonIcon, getActivityIcon, MAIN_CATEGORIES, CATEGORY_HIERARCHY, getIconForType } from '../utils/helpers.jsx';
 
@@ -25,14 +25,17 @@ export const CityModal = ({ show, onClose, title, citySearch, setCitySearch, cit
   </AnimatePresence>
 );
 
-export const EditModal = ({ show, isEditing, setIsEditing, editForm, setEditForm, handleUpdateItem, handleDeleteItem, loading }) => (
+export const EditModal = ({ show, onClose, isEditing, setIsEditing, editForm, setEditForm, handleUpdateItem, handleDeleteItem, loading }) => (
   <AnimatePresence>
     {show && (
-      <div className="modal-overlay" onClick={() => { setIsEditing(false); }}>
+      <div className="modal-overlay" onClick={onClose}>
         <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} className="modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflowY: 'auto' }}>
           {isEditing ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '2rem' }}>
-              <h2 className="title">Modifier le vêtement</h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h2 className="title" style={{ margin: 0 }}>Modifier le vêtement</h2>
+                <button type="button" className="icon-btn" onClick={onClose} aria-label="Fermer la fenêtre"><X size={20} /></button>
+              </div>
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>CATÉGORIE</label><ChoiceSelector options={MAIN_CATEGORIES} selected={editForm.main_category} onSelect={(val) => setEditForm({...editForm, main_category: val, type: CATEGORY_HIERARCHY[val][0]})} /></div>
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE</label><SearchSelector options={CATEGORY_HIERARCHY[editForm.main_category] || []} selected={editForm.type} onSelect={(val) => setEditForm({...editForm, type: val, icon: getIconForType(val)})} placeholder="Rechercher..." /></div>
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR</label><ColorPalette selected={editForm.color} onSelect={(val) => setEditForm({...editForm, color: val})} /></div>
@@ -42,7 +45,7 @@ export const EditModal = ({ show, isEditing, setIsEditing, editForm, setEditForm
             </div>
           ) : (
             <div style={{ paddingBottom: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h2 className="title">Détails</h2><button className="icon-btn" onClick={() => setIsEditing(false)}><X size={20} /></button></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h2 className="title">Détails</h2><button type="button" className="icon-btn" onClick={onClose} aria-label="Fermer les détails"><X size={20} /></button></div>
               <div style={{ width: '100%', aspectRatio: '1', borderRadius: '25px', overflow: 'hidden', background: 'white', marginBottom: '1.5rem', border: '1px solid rgba(0,0,0,0.05)' }}>
                 <img src={editForm.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               </div>
