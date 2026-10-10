@@ -15,61 +15,55 @@ const loadModel = async () => {
 }
 
 export const analyzeClothing = async (imageFile) => {
+  let objectUrl = null;
   try {
-    const net = await loadModel()
-    
-    // Créer un élément Image pour l'analyse
-    const imgElement = document.createElement('img')
-    imgElement.src = URL.createObjectURL(imageFile)
-    
-    await new Promise((resolve) => {
-      imgElement.onload = resolve
-    })
+    const net = await loadModel();
+    objectUrl = URL.createObjectURL(imageFile);
+    const imgElement = new Image();
+    imgElement.src = objectUrl;
+    await new Promise((resolve, reject) => {
+      imgElement.onload = resolve;
+      imgElement.onerror = () => reject(new Error("Impossible de lire cette image."));
+    });
 
-    // 1. Classification du type de vêtement (IA Locale)
-    const predictions = await net.classify(imgElement)
-    const topResult = predictions[0].className.toLowerCase()
-    
-    const type = mapPredictionToType(topResult)
-    
-    // 2. Détection de la couleur (Analyse de pixels locale)
-    const color = await detectDominantColor(imgElement)
-    
-    // 3. Déduction logique (Saison/Activité)
-    const season = getSeasonFromType(type)
-    const activity = 'Quotidien'
+    const predictions = await net.classify(imgElement);
+    const predictedType = mapPredictionToType((predictions[0]?.className || '').toLowerCase());
+    const color = await detectDominantColor(imgElement);
+    const type = predictedType || null;
 
     return {
       type,
       color,
-      season,
-      activity
-    }
+      season: type ? getSeasonFromType(type) : 'Toutes saisons',
+      activity: 'Quotidien',
+      confidence: predictions[0]?.probability ?? null
+    };
   } catch (error) {
-    console.error("Erreur IA locale:", error)
-    return {
-      type: 'Haut',
-      color: 'Noir',
-      season: 'Toutes saisons',
-      activity: 'Quotidien'
-    }
+    console.error("Erreur IA locale:", error);
+    throw new Error("L’analyse automatique a échoué. Tu peux toujours saisir les détails manuellement.");
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
-}
+};
 
 // Mappage des résultats MobileNet vers nos catégories
 const mapPredictionToType = (pred) => {
-  if (pred.includes('t-shirt') || pred.includes('jersey')) return 'T-shirt'
-  if (pred.includes('jean') || pred.includes('denim')) return 'Jean'
-  if (pred.includes('suit') || pred.includes('coat') || pred.includes('jacket')) return 'Veste'
-  if (pred.includes('dress') || pred.includes('gown')) return 'Robe'
-  if (pred.includes('shoe') || pred.includes('sneaker') || pred.includes('sandal')) return 'Basket'
-  if (pred.includes('cardigan') || pred.includes('sweater')) return 'Pull'
-  if (pred.includes('short')) return 'Short'
-  if (pred.includes('skirt')) return 'Jupe'
-  if (pred.includes('hat') || pred.includes('cap')) return 'Casquette'
-  if (pred.includes('bag') || pred.includes('purse')) return 'Sac'
-  return 'Haut' // Par défaut
-}
+  if (pred.includes('t-shirt') || pred.includes('jersey') || pred.includes('tee shirt')) return 'T-shirt';
+  if (pred.includes('jean') || pred.includes('denim')) return 'Jean';
+  if (pred.includes('trouser') || pred.includes('pants') || pred.includes('pant')) return 'Pantalon';
+  if (pred.includes('suit') || pred.includes('coat') || pred.includes('jacket') || pred.includes('blazer')) return 'Veste';
+  if (pred.includes('dress') || pred.includes('gown')) return 'Robe';
+  if (pred.includes('shoe') || pred.includes('sneaker') || pred.includes('trainer')) return 'Baskets';
+  if (pred.includes('sandal')) return 'Sandales';
+  if (pred.includes('cardigan') || pred.includes('sweater') || pred.includes('pullover')) return 'Pull';
+  if (pred.includes('short')) return 'Short';
+  if (pred.includes('skirt')) return 'Jupe';
+  if (pred.includes('shirt')) return 'Chemise';
+  if (pred.includes('blouse')) return 'Top / Blouse';
+  if (pred.includes('hat') || pred.includes('cap')) return 'Casquette';
+  if (pred.includes('bag') || pred.includes('purse') || pred.includes('backpack')) return 'Sac';
+  return null;
+};
 
 // Détection de couleur simplifiée (Analyse de la zone centrale de l'image)
 const detectDominantColor = async (img) => {
@@ -87,39 +81,29 @@ const detectDominantColor = async (img) => {
 }
 
 const mapRGBToColorName = (r, g, b) => {
-  if (r > 220 && g > 220 && b > 220) return 'Blanc'
-  if (r < 50 && g < 50 && b < 50) return 'Noir'
-  if (r > 150 && g < 100 && b < 100) return 'Bordeaux'
-  if (r > 200 && g > 150 && b < 150) return 'Rose'
-  if (r < 100 && g > 150 && b < 100) return 'Kaki'
-  if (r < 100 && g < 100 && b > 150) return 'Marine'
-  if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20) return 'Gris'
-  return 'Couleur'
-}
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max < 42) return 'Noir';
+  if (min > 225) return 'Blanc';
+  if (max - min < 22) return max > 190 ? 'Gris' : 'Gris';
+
+  if (r > 150 && g > 75 && b < 100 && r - b > 55) {
+    if (g > 105) return 'Orange';
+    return r > 205 ? 'Rouge' : 'Bordeaux';
+  }
+  if (r > 170 && g > 125 && b < 110) return r - g < 45 ? 'Moutarde' : 'Camel';
+  if (r > 185 && g > 165 && b > 130 && Math.abs(r - g) < 45) return 'Beige';
+  if (r > 170 && b > 115 && g < 150) return r - g > 55 ? 'Rose' : 'Violet';
+  if (r > 125 && b > 125 && g < 130) return 'Lilas';
+  if (g > r * 1.12 && g > b * 0.9) return g > 140 ? 'Vert Sapin' : 'Kaki';
+  if (b > r * 1.15 && b > g * 1.04) return b > 155 ? 'Bleu Ciel' : 'Marine';
+  if (r > 125 && g > 90 && b < 100) return 'Marron';
+  return 'Gris';
+};
 
 const getSeasonFromType = (type) => {
-  if (['T-shirt', 'Short', 'Robe', 'Jupe', 'Sandales'].includes(type)) return 'Été'
-  if (['Manteau', 'Parka', 'Pull', 'Bonnet', 'Bottes'].includes(type)) return 'Hiver'
-  return 'Printemps'
-}
-
-// On garde l'autre fonction pour la compatibilité mais on peut la simplifier
-export const generateOutfit = async (items, weather, lockedIds = {}) => {
-  // On utilise une logique interne simple pour rester gratuit
-  const temp = weather.temp
-  
-  const tops = items.filter(i => ['T-shirt', 'Pull', 'Chemise', 'Hoodie', 'Robe', 'Top', 'Blouse'].includes(i.type))
-  const bottoms = items.filter(i => ['Jean', 'Pantalon', 'Short', 'Jupe', 'Legging', 'Chino'].includes(i.type))
-  const layers = items.filter(i => ['Veste', 'Manteau', 'Cardigan', 'Blazer', 'Parka', 'Trench'].includes(i.type))
-  
-  const top = lockedIds.top ? items.find(i => i.id === lockedIds.top) : tops[Math.floor(Math.random() * tops.length)]
-  const bottom = lockedIds.bottom ? items.find(i => i.id === lockedIds.bottom) : bottoms[Math.floor(Math.random() * bottoms.length)]
-  const layer = lockedIds.layer ? items.find(i => i.id === lockedIds.layer) : (temp < 18 ? layers[Math.floor(Math.random() * layers.length)] : null)
-  
-  return {
-    top_id: top?.id,
-    bottom_id: bottom?.id,
-    layer_id: layer?.id,
-    explanation: `Il fait ${temp}°C. Voici une tenue ${lockedIds.top || lockedIds.bottom || lockedIds.layer ? 'personnalisée' : 'adaptée'} à ton dressing !`
-  }
-}
+  if (['T-shirt', 'Short', 'Robe', 'Jupe', 'Sandales'].includes(type)) return 'Été';
+  if (['Manteau', 'Pull', 'Bonnet', 'Bottes'].includes(type)) return 'Hiver';
+  if (['Pantalon', 'Jean', 'Veste', 'Baskets', 'Chemise'].includes(type)) return 'Printemps';
+  return 'Toutes saisons';
+};
