@@ -33,9 +33,8 @@ Deno.serve(async (req: Request) => {
   }
 
   for (const bucket of ["clothes-images", "avatars"]) {
-    let offset = 0;
     while (true) {
-      const { data: files, error: listError } = await admin.storage.from(bucket).list(user.id, { limit: 1000, offset });
+      const { data: files, error: listError } = await admin.storage.from(bucket).list(user.id, { limit: 1000, offset: 0 });
       if (listError) {
         return new Response(JSON.stringify({ error: "Could not clean private files" }), { status: 500, headers: corsHeaders });
       }
@@ -46,8 +45,7 @@ Deno.serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: "Could not remove private files" }), { status: 500, headers: corsHeaders });
         }
       }
-      if (!files || files.length < 1000) break;
-      offset += files.length;
+      if (!files || files.length < 1000 || !paths.length) break;
     }
   }
 
