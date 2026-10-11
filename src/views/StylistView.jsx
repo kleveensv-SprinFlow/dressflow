@@ -21,34 +21,56 @@ const GARMENT_HEIGHT = {
   'Bonnet': 62,
   'Chapeau': 70,
   'Bob': 58,
-  'T-shirt': 132,
-  'Top / Blouse': 126,
-  'Chemise': 156,
-  'Pull': 146,
-  'Sweat': 150,
-  'Veste': 176,
-  'Manteau': 210,
-  'Robe': 280,
-  'Pantalon': 196,
-  'Jean': 196,
-  'Jogging': 188,
-  'Legging': 188,
-  'Short': 118,
-  'Jupe': 136,
-  'Baskets': 58,
-  'Ville': 58,
-  'Sandales': 52,
-  'Talons': 64,
-  'Bottes': 92,
-  'Sac': 108
+  'T-shirt': 168,
+  'Top / Blouse': 160,
+  'Chemise': 188,
+  'Pull': 178,
+  'Sweat': 182,
+  'Veste': 206,
+  'Manteau': 248,
+  'Robe': 300,
+  'Pantalon': 214,
+  'Jean': 214,
+  'Jogging': 206,
+  'Legging': 206,
+  'Short': 132,
+  'Jupe': 156,
+  'Baskets': 70,
+  'Ville': 70,
+  'Sandales': 62,
+  'Talons': 76,
+  'Bottes': 108,
+  'Sac': 120
 };
 
-const SLOT_HEIGHT = { head: 64, layer: 176, top: 136, bottom: 196, feet: 58, bag: 108 };
-const TALLEST = 280;
+const SLOT_HEIGHT = { head: 72, layer: 196, top: 168, bottom: 214, feet: 70, bag: 120 };
+const TALLEST = 300;
+const PIECE_OVERLAP = { head: -4, layer: -42, top: -28, bottom: -14, feet: 0, bag: 0 };
 
 function garmentHeight(item, slot) {
   if (item?.type && GARMENT_HEIGHT[item.type]) return GARMENT_HEIGHT[item.type];
-  return SLOT_HEIGHT[slot?.key] || 136;
+  return SLOT_HEIGHT[slot?.key] || 168;
+}
+
+function nudgeStyle(side) {
+  return {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    [side]: -4,
+    width: 28,
+    height: 28,
+    borderRadius: '50%',
+    border: 'none',
+    background: 'rgba(255,255,255,0.92)',
+    color: 'var(--text-main)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 8px rgba(45, 38, 35, 0.08)',
+    cursor: 'pointer',
+    zIndex: 6
+  };
 }
 
 export default function StylistView({
@@ -156,7 +178,7 @@ export default function StylistView({
       <header style={{ marginBottom: '1.2rem', textAlign: 'center' }}>
         <h1 className="title" style={{ fontSize: '1.85rem', letterSpacing: '-0.5px' }}>Silhouette & Look</h1>
         <p className="subtitle" style={{ fontSize: '0.86rem', marginTop: '4px' }}>
-          Touche une pièce pour la changer ou glisse pour faire défiler ta penderie.
+          Touche une pièce pour la changer. Glisse-la pour la suivante.
         </p>
       </header>
 
@@ -186,19 +208,15 @@ export default function StylistView({
         </div>
       ) : (
         <>
-          {/* SILHOUETTE LOOKBOOK : DE LA TÊTE AUX PIEDS */}
+          {/* Une seule silhouette, sans cartes : les pièces flottent les unes sous les autres. */}
           <div style={{
-            background: 'radial-gradient(circle at center, #ffffff 50%, #f6f2ea 100%)',
-            borderRadius: '32px',
-            padding: '1.5rem 1rem',
-            border: '1px solid rgba(220, 212, 200, 0.5)',
-            boxShadow: '0 8px 30px rgba(45, 38, 35, 0.05)',
-            position: 'relative',
+            background: '#ffffff',
+            borderRadius: '28px',
+            padding: '1.6rem 0.6rem 1.2rem',
+            marginBottom: '1.5rem',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            marginBottom: '1.5rem'
+            alignItems: 'center'
           }}>
             {SILHOUETTE_SLOTS.map(slot => {
               const item = getActiveItem(slot.key);
@@ -206,25 +224,44 @@ export default function StylistView({
               const hasOptions = pool.length > 1;
               const locked = isSlotLocked(slot.key);
 
-              // Si le slot est optionnel (veste, sac) et qu'il n'y a pas de pièce, on affiche une carte d'ajout discrète
               if (!item && slot.optional && !pool.length) return null;
+
+              if (!item) {
+                return (
+                  <button
+                    key={slot.key}
+                    type="button"
+                    onClick={() => { if (pool.length) setActivePickerSlot(slot); }}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      padding: '6px 10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + {slot.label}
+                  </button>
+                );
+              }
 
               return (
                 <div
                   key={slot.key}
                   style={{
                     position: 'relative',
-                    width: '72%',
-                    maxWidth: '240px',
-                    transition: 'all 0.3s ease'
+                    width: '86%',
+                    maxWidth: '300px',
+                    height: garmentHeight(item, slot),
+                    marginBottom: PIECE_OVERLAP[slot.key] || 0,
+                    zIndex: slot.key === 'layer' ? 4 : slot.key === 'top' ? 3 : slot.key === 'bottom' ? 2 : 1
                   }}
                 >
-                  {/* Carte vêtement interactive */}
                   <motion.div
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      if (pool.length > 0) setActivePickerSlot(slot);
-                    }}
+                    onClick={() => { if (pool.length > 0) setActivePickerSlot(slot); }}
                     drag="x"
                     dragConstraints={{ left: 0, right: 0 }}
                     dragElastic={0.2}
@@ -233,144 +270,77 @@ export default function StylistView({
                       else if (info.offset.x < -40) stepSlotItem(slot.key, 'next');
                     }}
                     style={{
-                      height: item ? garmentHeight(item, slot) : 92,
-                      borderRadius: '24px',
-                      background: item ? 'rgba(255, 255, 255, 0.7)' : 'rgba(240, 235, 225, 0.5)',
-                      border: item ? '1px solid rgba(220, 212, 200, 0.4)' : '1.5px dashed rgba(200, 190, 175, 0.6)',
-                      boxShadow: item ? '0 4px 16px rgba(45, 38, 35, 0.04)' : 'none',
+                      height: '100%',
                       display: 'flex',
-                      flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: '10px',
                       cursor: 'pointer',
-                      position: 'relative',
                       touchAction: 'pan-y'
                     }}
                   >
-                    {item ? (
-                      item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt={item.type || slot.label}
-                          style={{
-                            height: '100%',
-                            width: 'auto',
-                            maxWidth: '100%',
-                            objectFit: 'contain',
-                            filter: 'drop-shadow(0 8px 16px rgba(45, 38, 35, 0.12))',
-                            pointerEvents: 'none'
-                          }}
-                          onError={() => onImageError?.(item)}
-                        />
-                      ) : (
-                        <span style={{ fontSize: '3rem', pointerEvents: 'none' }}>{item.icon || slot.defaultIcon}</span>
-                      )
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '8px', opacity: 0.6 }}>
-                        <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: '4px' }}>{slot.defaultIcon}</span>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>+ {slot.label}</span>
-                      </div>
-                    )}
-
-                    {/* Flèches subtiles carrousel gauche / droite */}
-                    {hasOptions && (
-                      <>
-                        <button
-                          type="button"
-                          aria-label="Pièce précédente"
-                          onClick={(e) => stepSlotItem(slot.key, 'prev', e)}
-                          style={{
-                            position: 'absolute',
-                            left: '-14px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '50%',
-                            border: '1px solid rgba(220, 212, 200, 0.7)',
-                            background: '#ffffff',
-                            color: 'var(--text-main)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 2px 8px rgba(45, 38, 35, 0.08)',
-                            cursor: 'pointer',
-                            zIndex: 4
-                          }}
-                        >
-                          <ChevronLeft size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Pièce suivante"
-                          onClick={(e) => stepSlotItem(slot.key, 'next', e)}
-                          style={{
-                            position: 'absolute',
-                            right: '-14px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '50%',
-                            border: '1px solid rgba(220, 212, 200, 0.7)',
-                            background: '#ffffff',
-                            color: 'var(--text-main)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 2px 8px rgba(45, 38, 35, 0.08)',
-                            cursor: 'pointer',
-                            zIndex: 4
-                          }}
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                      </>
-                    )}
-
-                    {/* Cadenas pour verrouiller en mode IA */}
-                    {item && (
-                      <button
-                        type="button"
-                        aria-label={locked ? 'Déverrouiller' : 'Verrouiller'}
-                        onClick={(e) => toggleLock(slot.key, e)}
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.type || slot.label}
                         style={{
-                          position: 'absolute',
-                          top: '6px',
-                          right: '6px',
-                          width: '26px',
-                          height: '26px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: locked ? 'var(--primary)' : 'rgba(255, 255, 255, 0.85)',
-                          color: locked ? '#ffffff' : 'var(--text-muted)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-                          cursor: 'pointer',
-                          zIndex: 3
+                          height: '100%',
+                          width: 'auto',
+                          maxWidth: '100%',
+                          objectFit: 'contain',
+                          filter: 'drop-shadow(0 12px 16px rgba(45, 38, 35, 0.14))',
+                          pointerEvents: 'none'
                         }}
-                      >
-                        {locked ? <Lock size={12} /> : <Unlock size={12} />}
-                      </button>
+                        onError={() => onImageError?.(item)}
+                      />
+                    ) : (
+                      <span style={{ fontSize: '3rem', pointerEvents: 'none' }}>{item.icon || slot.defaultIcon}</span>
                     )}
                   </motion.div>
 
-                  {/* Étiquette type sous la pièce */}
-                  {item && (
-                    <div style={{ textAlign: 'center', marginTop: '4px' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        {item.type}
-                      </span>
-                      {item.color && (
-                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: '4px' }}>
-                          · {item.color}
-                        </span>
-                      )}
-                    </div>
+                  {hasOptions && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Pièce précédente"
+                        onClick={(e) => stepSlotItem(slot.key, 'prev', e)}
+                        style={nudgeStyle('left')}
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Pièce suivante"
+                        onClick={(e) => stepSlotItem(slot.key, 'next', e)}
+                        style={nudgeStyle('right')}
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </>
                   )}
+
+                  <button
+                    type="button"
+                    aria-label={locked ? 'Déverrouiller' : 'Verrouiller'}
+                    onClick={(e) => toggleLock(slot.key, e)}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: -6,
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: locked ? 'var(--primary)' : 'transparent',
+                      color: locked ? '#ffffff' : 'rgba(45, 38, 35, 0.35)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      zIndex: 5
+                    }}
+                  >
+                    {locked ? <Lock size={13} /> : <Unlock size={13} />}
+                  </button>
                 </div>
               );
             })}
