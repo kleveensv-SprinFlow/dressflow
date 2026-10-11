@@ -49,6 +49,7 @@ export const currentSeason = () => {
 };
 
 export const ALL_COLORS = ['Blanc', 'Noir', 'Gris', 'Beige', 'Marine', 'Bleu Ciel', 'Kaki', 'Vert Sapin', 'Bordeaux', 'Rouge', 'Rose Poudré', 'Rose', 'Moutarde', 'Jaune', 'Lilas', 'Violet', 'Terracotta', 'Orange', 'Or', 'Argent', 'Marron', 'Camel'];
+export const ALL_PATTERNS = ['Uni', 'Rayures', 'Carreaux', 'Imprimé'];
 export const ALL_ACTIVITIES = ['Quotidien', 'Sport', 'Soirée', 'Travail'];
 export const ALL_SEASONS = ['Été', 'Hiver', 'Printemps', 'Automne'];
 

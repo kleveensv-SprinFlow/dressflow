@@ -192,7 +192,17 @@ const outfitScore = (pieces, roles, temp, rainy, previousIds, targetActivity = n
     activityBonus = matches * 14;
   }
 
-  return colorScore * 0.30 + weather * 0.20 + season * 0.12 + rotation * 0.12 + structure * 0.12 + variety * 0.08 + activityBonus + Math.random() * 2.2;
+  // Règle de style sur les motifs : équilibre de la silhouette
+  // Évite de mélanger un haut à motif avec un bas à motif
+  let patternBonus = 0;
+  const patternedPieces = pieces.filter(p => p?.pattern && p.pattern !== 'Uni');
+  if (patternedPieces.length >= 2) {
+    patternBonus = -35; // Pénalité pour surcharge visuelle (ex: rayures + carreaux)
+  } else if (patternedPieces.length === 1) {
+    patternBonus = 12; // Bonus pour une pièce forte mise en valeur avec des pièces unies
+  }
+
+  return colorScore * 0.28 + weather * 0.18 + season * 0.12 + rotation * 0.12 + structure * 0.12 + variety * 0.08 + activityBonus + patternBonus + Math.random() * 2.2;
 };
 
 /**

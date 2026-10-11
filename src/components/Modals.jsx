@@ -39,6 +39,22 @@ export const EditModal = ({ show, onClose, isEditing, setIsEditing, editForm, se
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>CATÉGORIE</label><ChoiceSelector options={MAIN_CATEGORIES} selected={editForm.main_category} onSelect={(val) => setEditForm({...editForm, main_category: val, type: CATEGORY_HIERARCHY[val][0]})} /></div>
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>TYPE</label><SearchSelector options={CATEGORY_HIERARCHY[editForm.main_category] || []} selected={editForm.type} onSelect={(val) => setEditForm({...editForm, type: val, icon: getIconForType(val)})} placeholder="Rechercher..." /></div>
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>COULEUR</label><ColorPalette selected={editForm.color} onSelect={(val) => setEditForm({...editForm, color: val})} /></div>
+              <div>
+                <label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>MOTIF</label>
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
+                  {['Uni', 'Rayures', 'Carreaux', 'Imprimé'].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, pattern: p })}
+                      className={`filter-pill ${(editForm.pattern || 'Uni') === p ? 'active' : ''}`}
+                      style={{ flex: 1, padding: '6px 10px', fontSize: '0.72rem', justifyContent: 'center' }}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>SAISONS</label><ChoiceSelector multi options={ALL_SEASONS} selected={Array.isArray(editForm.season) ? editForm.season : (typeof editForm.season === 'string' ? editForm.season.split(', ') : [])} onSelect={(val) => setEditForm({...editForm, season: val})} getIcon={getSeasonIcon} /></div>
               <div><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 800 }}>ACTIVITÉS</label><ChoiceSelector multi options={ALL_ACTIVITIES} selected={Array.isArray(editForm.activity) ? editForm.activity : (typeof editForm.activity === 'string' ? editForm.activity.split(', ') : [])} onSelect={(val) => setEditForm({...editForm, activity: val})} getIcon={getActivityIcon} /></div>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}><motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1 }} onClick={handleUpdateItem}>Sauvegarder ✨</motion.button><motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => setIsEditing(false)}>Annuler</motion.button></div>
@@ -52,8 +68,8 @@ export const EditModal = ({ show, onClose, isEditing, setIsEditing, editForm, se
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '1.5rem' }}>
                 <div className="info-badge"><Tag size={14} /> {editForm.type}</div>
                 <div className="info-badge"><Palette size={14} /> {editForm.color}</div>
+                <div className="info-badge"><Sparkles size={14} /> {editForm.pattern || 'Uni'}</div>
                 <div className="info-badge"><Info size={14} /> {editForm.season}</div>
-                <div className="info-badge"><Trash2 size={14} /> {editForm.activity}</div>
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1 }} onClick={() => setIsEditing(true)}>Modifier</motion.button>

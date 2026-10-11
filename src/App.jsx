@@ -101,7 +101,7 @@ function App() {
   const fileInputRef = useRef(null)
   const galleryInputRef = useRef(null)
 
-  const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', season: [currentSeason()], activity: ['Quotidien'], icon: '👕' })
+  const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', pattern: 'Uni', season: [currentSeason()], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
   const [tempFile, setTempFile] = useState(null)
 
@@ -594,6 +594,7 @@ function App() {
         main_category: editForm.main_category,
         type: editForm.type,
         color: editForm.color,
+        pattern: editForm.pattern || 'Uni',
         season: Array.isArray(editForm.season) ? editForm.season.join(', ') : editForm.season,
         activity: Array.isArray(editForm.activity) ? editForm.activity.join(', ') : editForm.activity,
         icon: getIconForType(editForm.type)
@@ -702,27 +703,32 @@ function App() {
         const file = acceptedFiles[0];
         setTempFile(file);
         setSelectedImage(URL.createObjectURL(file));
-        const detectedColor = await detectDominantColor(file);
-        setNewItem({
-          main_category: null,
-          type: '',
-          color: detectedColor || 'Blanc',
+        const detected = await detectDominantColor(file);
+        setNewItem(prev => ({
+          main_category: prev.main_category || null,
+          type: prev.type || '',
+          color: detected?.color || 'Blanc',
+          pattern: detected?.pattern || 'Uni',
           season: [currentSeason()],
           activity: ['Quotidien'],
-          icon: '👕'
-        });
+          icon: prev.icon || '👕'
+        }));
         setView('add-detail');
       } else {
-        const initialBulk = await Promise.all(acceptedFiles.map(async file => ({
-          file,
-          preview: URL.createObjectURL(file),
-          main_category: 'Haut',
-          type: 'T-shirt',
-          color: (await detectDominantColor(file)) || 'Blanc',
-          season: [currentSeason()],
-          activity: ['Quotidien'],
-          icon: '👕'
-        })));
+        const initialBulk = await Promise.all(acceptedFiles.map(async file => {
+          const detected = await detectDominantColor(file);
+          return {
+            file,
+            preview: URL.createObjectURL(file),
+            main_category: 'Haut',
+            type: 'T-shirt',
+            color: detected?.color || 'Blanc',
+            pattern: detected?.pattern || 'Uni',
+            season: [currentSeason()],
+            activity: ['Quotidien'],
+            icon: '👕'
+          };
+        }));
         setBulkItems(initialBulk);
         setView('bulk-add');
       }
@@ -757,6 +763,7 @@ function App() {
           main_category: item.main_category,
           type: item.type,
           color: item.color,
+          pattern: item.pattern || 'Uni',
           season: Array.isArray(item.season) ? item.season.join(', ') : item.season,
           activity: Array.isArray(item.activity) ? item.activity.join(', ') : item.activity,
           icon: item.icon,
@@ -806,6 +813,7 @@ function App() {
       const { error: insertError } = await supabase.from('clothes').insert([{
         profile_id: uid,
         ...newItem,
+        pattern: newItem.pattern || 'Uni',
         season: Array.isArray(newItem.season) ? newItem.season.join(', ') : newItem.season,
         activity: Array.isArray(newItem.activity) ? newItem.activity.join(', ') : newItem.activity,
         image_url: fileName
@@ -943,6 +951,15 @@ function App() {
               filteredItems={filteredItems} 
               onSelectItem={(item) => { setSelectedItem(item); setEditForm({ ...item }); setIsEditing(false); }} 
               onAddClick={() => setView('add-choice')} 
+              onAddCategory={(cat, defaultType) => {
+                setNewItem(prev => ({
+                  ...prev,
+                  main_category: cat,
+                  type: defaultType,
+                  icon: getIconForType(defaultType)
+                }));
+                setView('add-choice');
+              }}
               onAddDemoItems={handleAddDemoItems}
               weather={weather} 
               weatherLoading={weatherLoading} 

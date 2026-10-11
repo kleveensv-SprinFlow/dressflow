@@ -15,6 +15,7 @@ const DashboardView = ({
   onSelectItem,
   filteredItems,
   onAddClick,
+  onAddCategory,
   onAddDemoItems,
   weather,
   weatherLoading,
@@ -54,74 +55,64 @@ const DashboardView = ({
         )}
       </header>
 
-      {/* 2. CARTE MÉTÉO ÉLÉGANTE ET CONTEXTUELLE */}
-      <div className="weather-hero-card">
+      {/* 2. HEADER MÉTÉO DISCRET & ÉLÉGANT SOUS LE TITRE */}
+      <div style={{ marginBottom: '1.25rem' }}>
         {weatherLoading ? (
-          <div className="weather-loading-state">
-            <Loader2 className="animate-spin" size={22} color="var(--primary)" />
-            <span>Actualisation de la météo…</span>
+          <div className="weather-pill-compact" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(8px)', border: '1px solid rgba(0,0,0,0.05)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            <Loader2 className="animate-spin" size={14} color="var(--primary)" />
+            <span>Météo en cours…</span>
           </div>
         ) : weather ? (
-          <div
-            className="weather-active-state"
+          <button
+            type="button"
             onClick={onWeatherClick}
-            role="button"
-            tabIndex={0}
-            aria-label={`Météo actuelle : ${weather.temp} degrés, ${weather.description}. Toucher pour changer.`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '7px 15px',
+              borderRadius: '20px',
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(0, 0, 0, 0.06)',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: 'var(--text-main)',
+              transition: 'all 0.2s ease'
+            }}
           >
-            <div className="weather-main-info">
-              <div className="weather-icon-bubble">
-                {weather.code && [51, 58, 61, 63, 80, 95].includes(weather.code) ? (
-                  <CloudRain size={24} />
-                ) : weather.code && [1, 2, 3].includes(weather.code) ? (
-                  <CloudSun size={24} />
-                ) : (
-                  <Sun size={24} />
-                )}
-              </div>
-              <div className="weather-text-block">
-                <div className="weather-temp-row">
-                  <span className="weather-temp">{weather.temp}°C</span>
-                  <span className="weather-bullet">•</span>
-                  <span className="weather-city">{weather.city || 'Position actuelle'}</span>
-                </div>
-                <div className="weather-condition">{weather.description}</div>
-              </div>
-              <ChevronRight size={18} style={{ opacity: 0.35, marginLeft: 'auto' }} />
-            </div>
-            {weatherTip && (
-              <div className="weather-tip-pill">
-                <Sparkles size={14} style={{ flexShrink: 0 }} />
-                <span>{weatherTip}</span>
-              </div>
-            )}
-          </div>
+            <MapPin size={13} color="var(--primary)" />
+            <span>{weather.city || 'Position'}</span>
+            <span style={{ opacity: 0.3 }}>•</span>
+            <span>{weather.temp}°C</span>
+            <span>
+              {weather.code && [51, 58, 61, 63, 80, 95].includes(weather.code) ? '🌧️' : weather.code && [1, 2, 3].includes(weather.code) ? '🌤️' : '☀️'}
+            </span>
+            <span style={{ opacity: 0.6, fontWeight: 500 }}>{weather.description}</span>
+          </button>
         ) : (
-          <div
-            className="weather-empty-state"
+          <button
+            type="button"
             onClick={onWeatherClick}
-            role="button"
-            tabIndex={0}
-            aria-label="Définir ma ville pour la météo"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '7px 15px',
+              borderRadius: '20px',
+              background: 'rgba(255, 255, 255, 0.9)',
+              border: '1px dashed rgba(var(--primary-rgb), 0.4)',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: 'var(--primary)'
+            }}
           >
-            <div className="weather-icon-bubble empty">
-              <CloudSun size={22} />
-            </div>
-            <div className="weather-empty-text">
-              <div className="weather-empty-title">Météo du jour</div>
-              <div className="weather-empty-desc">Choisis ta ville pour adapter tes tenues du jour.</div>
-            </div>
-            <button
-              type="button"
-              className="btn-weather-set"
-              onClick={(e) => {
-                e.stopPropagation();
-                onWeatherClick();
-              }}
-            >
-              <MapPin size={13} /> Choisir
-            </button>
-          </div>
+            <MapPin size={13} />
+            <span>Définir ma ville pour adapter mes tenues 🌤️</span>
+          </button>
         )}
       </div>
 
@@ -173,61 +164,118 @@ const DashboardView = ({
         </section>
       )}
 
-      {/* 4. ÉTAT DRESSING VIDE : ONBOARDING GUIDE ACCUEILLANT */}
+      {/* 4. ÉTAT DRESSING VIDE : PENDERIE INTERACTIVE (CASIERS 2X2 MODERNES) */}
       {items.length === 0 ? (
-        <section className="onboarding-hero-card">
-          <div className="onboarding-badge-stack">
-            <span className="badge-emoji">👕</span>
-            <span className="badge-emoji main">✨</span>
-            <span className="badge-emoji">👖</span>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '140px' }}>
+          {/* TITRE & SOUS-TITRE ÉPURÉ */}
+          <div>
+            <h2 className="title" style={{ fontSize: '1.35rem', letterSpacing: '-0.3px', margin: 0 }}>
+              Compose ta première tenue
+            </h2>
+            <p className="subtitle" style={{ fontSize: '0.82rem', marginTop: '4px', marginBottom: 0 }}>
+              Touche un cintre pour ajouter une pièce et débloquer les tenues du jour.
+            </p>
           </div>
 
-          <h2 className="onboarding-title">Ton dressing prend vie ici</h2>
-          <p className="onboarding-subtitle">
-            Ajoute 2 ou 3 vêtements pour recevoir des suggestions de tenues personnalisées et adaptées à ta météo.
-          </p>
-
-          <div className="onboarding-steps">
-            <div className="onboarding-step-item">
-              <div className="step-num">1</div>
-              <div className="step-text">
-                <strong>Ajoute tes pièces clés</strong>
-                <span>Un haut, un bas, une veste ou des baskets</span>
-              </div>
-            </div>
-            <div className="onboarding-step-item">
-              <div className="step-num">2</div>
-              <div className="step-text">
-                <strong>Algorithme de style</strong>
-                <span>Harmonie des couleurs, météo et coupes</span>
-              </div>
-            </div>
-            <div className="onboarding-step-item">
-              <div className="step-num">3</div>
-              <div className="step-text">
-                <strong>Tenues prêtes chaque jour</strong>
-                <span>Des associations cohérentes calculées en 1 clic</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="onboarding-actions">
-            <button type="button" className="btn-primary" onClick={onAddClick}>
-              <Plus size={20} />
-              Ajouter mon premier vêtement
-            </button>
-            {onAddDemoItems && (
-              <button
+          {/* GRILLE 2X2 DE CASIERS / CINTRES */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            {[
+              { category: 'Haut', defaultType: 'T-shirt', label: 'Haut', desc: 'T-shirt, chemise, pull', icon: '👕', badge: '1' },
+              { category: 'Bas', defaultType: 'Jean', label: 'Bas', desc: 'Jean, pantalon, short', icon: '👖', badge: '2' },
+              { category: 'Haut', defaultType: 'Veste', label: 'Veste / Manteau', desc: 'Couche météo', icon: '🧥', badge: '3' },
+              { category: 'Chaussures', defaultType: 'Baskets', label: 'Chaussures', desc: 'Baskets, bottes', icon: '👟', badge: '4' }
+            ].map((slot, idx) => (
+              <motion.button
+                key={idx}
                 type="button"
-                className="btn-secondary-onboarding"
-                onClick={onAddDemoItems}
-                disabled={loading}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => onAddCategory ? onAddCategory(slot.category, slot.defaultType) : onAddClick()}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1.5px dashed rgba(var(--primary-rgb), 0.25)',
+                  borderRadius: '22px',
+                  padding: '1.25rem 1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  boxShadow: '0 4px 18px rgba(0,0,0,0.03)',
+                  transition: 'all 0.2s ease'
+                }}
               >
-                <Sparkles size={16} />
-                Essayer avec des pièces démo
-              </button>
-            )}
+                <div style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '10px',
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '10px',
+                  background: 'rgba(var(--primary-rgb), 0.08)',
+                  color: 'var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 800,
+                  fontSize: '0.72rem'
+                }}>
+                  <Plus size={15} />
+                </div>
+
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '18px',
+                  background: 'linear-gradient(135deg, rgba(var(--primary-rgb), 0.06), rgba(var(--primary-rgb), 0.14))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '2rem',
+                  marginBottom: '10px'
+                }}>
+                  {slot.icon}
+                </div>
+
+                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '2px' }}>
+                  {slot.label}
+                </span>
+                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
+                  {slot.desc}
+                </span>
+              </motion.button>
+            ))}
           </div>
+
+          {/* BOUTON DÉMO DISCRET ET NON INTRUSIF */}
+          {onAddDemoItems && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={onAddDemoItems}
+              disabled={loading}
+              style={{
+                marginTop: '0.4rem',
+                padding: '14px',
+                borderRadius: '18px',
+                background: 'rgba(255, 255, 255, 0.9)',
+                border: '1px solid rgba(0,0,0,0.06)',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                color: 'var(--primary)',
+                fontWeight: 700,
+                fontSize: '0.84rem'
+              }}
+            >
+              <Sparkles size={16} />
+              <span>Remplir avec 4 vêtements démo pour tester</span>
+            </motion.button>
+          )}
         </section>
       ) : (
         <>

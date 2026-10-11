@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Camera, Image as ImageIcon, Loader2, Layers, Tag, Palette, Sun, Briefcase, Check } from 'lucide-react';
+import { Camera, Image as ImageIcon, Loader2, Layers, Tag, Palette, Sun, Briefcase, Check, Sparkles } from 'lucide-react';
 import { ChoiceSelector, SearchSelector, ColorPalette } from '../components/UIElements';
-import { MAIN_CATEGORIES, CATEGORY_HIERARCHY, ALL_SEASONS, ALL_ACTIVITIES, getSeasonIcon, getActivityIcon } from '../utils/helpers.jsx';
+import { MAIN_CATEGORIES, CATEGORY_HIERARCHY, ALL_SEASONS, ALL_ACTIVITIES, ALL_PATTERNS, getSeasonIcon, getActivityIcon } from '../utils/helpers.jsx';
 
 const AddClothingView = ({
   view,
@@ -179,6 +179,39 @@ const AddClothingView = ({
               )}
             </div>
             <ColorPalette selected={newItem.color} onSelect={(val) => setNewItem({ ...newItem, color: val })} />
+          </section>
+
+          {/* 3 BIS. MOTIF / RAYURES */}
+          <section>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Sparkles size={16} color="var(--primary)" />
+                <label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>
+                  Motif · {newItem.pattern || 'Uni'}
+                </label>
+              </div>
+              {newItem.pattern && newItem.pattern !== 'Uni' && (
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <Check size={12} /> Détecté
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
+              {ALL_PATTERNS.map((p) => {
+                const active = (newItem.pattern || 'Uni') === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setNewItem({ ...newItem, pattern: p })}
+                    className={`filter-pill ${active ? 'active' : ''}`}
+                    style={{ flex: 1, padding: '8px 12px', fontSize: '0.78rem', justifyContent: 'center' }}
+                  >
+                    {p === 'Rayures' ? '🦓 ' : p === 'Carreaux' ? '🏁 ' : p === 'Imprimé' ? '🎨 ' : '⚪ '}{p}
+                  </button>
+                );
+              })}
+            </div>
           </section>
 
           {/* 4. SAISONS */}
