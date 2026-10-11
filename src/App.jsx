@@ -720,7 +720,7 @@ function App() {
         // Lancement asynchrone du détourage pour ne pas bloquer l'affichage
         (async () => {
           try {
-            const { file: processed, removed } = await removeBackground(file);
+            const { file: processed, removed, main_category, type, pattern } = await removeBackground(file);
             if (removed) {
               setCutoutFile(processed);
               setTempFile(processed);
@@ -730,8 +730,11 @@ function App() {
               const detected = await detectDominantColor(processed);
               setNewItem(prev => ({
                 ...prev,
+                main_category: main_category || prev.main_category,
+                type: type || prev.type,
+                icon: type ? getIconForType(type) : prev.icon,
                 color: detected?.color || prev.color,
-                pattern: detected?.pattern || prev.pattern
+                pattern: pattern || detected?.pattern || prev.pattern
               }));
             } else {
               const detected = await detectDominantColor(file);
@@ -773,7 +776,7 @@ function App() {
           for (let i = 0; i < acceptedFiles.length; i++) {
             const f = acceptedFiles[i];
             try {
-              const { file: cutF, removed } = await removeBackground(f);
+              const { file: cutF, removed, main_category, type, pattern } = await removeBackground(f);
               const activeF = removed ? cutF : f;
               const detected = await detectDominantColor(activeF);
               setBulkItems(prev => {
@@ -785,8 +788,11 @@ function App() {
                     cutoutFile: removed ? cutF : null,
                     useCutout: removed,
                     cutoutPreview: removed ? URL.createObjectURL(cutF) : null,
+                    main_category: main_category || next[i].main_category,
+                    type: type || next[i].type,
+                    icon: type ? getIconForType(type) : next[i].icon,
                     color: detected?.color || 'Blanc',
-                    pattern: detected?.pattern || 'Uni'
+                    pattern: pattern || detected?.pattern || 'Uni'
                   };
                 }
                 return next;

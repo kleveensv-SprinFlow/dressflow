@@ -30,7 +30,7 @@ const AddClothingView = ({
       <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: '1.5rem' }}>
         <header style={{ textAlign: 'center' }}>
           <h2 className="title" style={{ fontSize: '1.9rem', letterSpacing: '-0.5px' }}>Ajouter une pièce</h2>
-          <p className="subtitle" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Détourage automatique et silhouette propre ✨</p>
+          <p className="subtitle" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Seul le vêtement reste, sur un fond transparent</p>
         </header>
 
         {/* CONSEIL PHOTO FAÇON WHERING */}
@@ -59,7 +59,7 @@ const AddClothingView = ({
             💡
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.45 }}>
-            <strong>Conseil photo :</strong> Pose ton vêtement à plat sur ton lit/table ou suspends-le sur un cintre. Le fond sera automatiquement retiré !
+            <strong>Conseil photo :</strong> Le fond, le visage et la peau sont retirés. Les pixels du tissu d’origine sont conservés.
           </div>
         </div>
 
