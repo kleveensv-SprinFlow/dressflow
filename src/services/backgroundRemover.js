@@ -104,6 +104,46 @@ export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 102
 };
 
 /**
+ * Redimensionne un File image côté Web pour limiter l'empreinte mémoire
+ * avant tout transfert ou traitement natif (évite les OutOfMemory sur photos 48MP)
+ */
+const prepareResizedImageBase64 = async (file, maxDim = 1024) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.src = url;
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
+
+      if (w > maxDim || h > maxDim) {
+        const ratio = Math.min(maxDim / w, maxDim / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      // Export JPEG qualité 0.85
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const base64 = dataUrl.split(',')[1];
+      resolve({ base64, width: w, height: h });
+    };
+
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+  });
+};
+
+/**
  * Supprime l'arrière-plan d'une photo de vêtement via Google ML Kit On-Device.
  * Si le détourage échoue ou si non supporté (navigateur), renvoie proprement le fichier original.
  */
@@ -113,6 +153,7 @@ export const removeBackground = async (file) => {
   }
 
   let tempInputPath = null;
+  let tempFileName = null;
   try {
     // 1. Vérifier si le module ML Kit est disponible ou à installer
     try {
@@ -124,22 +165,26 @@ export const removeBackground = async (file) => {
       console.warn("Module Google ML Kit check/install warning:", modErr);
     }
 
-    // 2. Écrire le fichier dans le cache temporaire de l'application
-    const tempFileName = `raw_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-    const base64Data = await fileToBase64(file);
+    // 2. Redimensionner l'image AVANT de l'écrire pour éviter le crash mémoire (OOM)
+    // Les photos d'appareil font souvent 12-48 mégapixels ce qui fait exploser la RAM Java
+    const { base64, width: scaledW, height: scaledH } = await prepareResizedImageBase64(file, 1024);
+
+    tempFileName = `raw_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
     const savedFile = await Filesystem.writeFile({
       path: tempFileName,
-      data: base64Data,
+      data: base64,
       directory: Directory.Cache
     });
 
     tempInputPath = savedFile.uri;
 
-    // 3. Exécuter la segmentation de sujet via ML Kit
+    // 3. Exécuter la segmentation de sujet via ML Kit avec dimensions maîtrisées
     const result = await SubjectSegmentation.processImage({
       path: tempInputPath,
-      confidence: 0.6 // Seuil adapté pour préserver les contours fins des vêtements
+      width: scaledW,
+      height: scaledH,
+      confidence: 0.55
     });
 
     if (!result?.path) {
@@ -165,8 +210,8 @@ export const removeBackground = async (file) => {
     };
   } catch (error) {
     console.warn("Échec du détourage ML Kit, conservation de l'original:", error);
-    if (tempInputPath) {
-      Filesystem.deleteFile({ path: tempInputPath, directory: Directory.Cache }).catch(() => {});
+    if (tempFileName) {
+      Filesystem.deleteFile({ path: tempFileName, directory: Directory.Cache }).catch(() => {});
     }
     return {
       file,
