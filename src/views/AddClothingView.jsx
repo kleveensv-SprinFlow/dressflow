@@ -312,7 +312,7 @@ const AddClothingView = ({
                   aria-label="Taille du pinceau"
                 />
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '6px 0 0', textAlign: 'center' }}>
-                  Le bas du pantalon a sauté ? Rajoute le tissu au doigt. Un reste de décor ? Efface-le.
+                  Pince à deux doigts pour zoomer. Un doigt corrige, la loupe montre le bord.
                 </p>
               </div>
             )}
