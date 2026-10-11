@@ -327,13 +327,6 @@ function App() {
     };
   }, [uid])
 
-  // Local convenience quota only; production entitlements must also be enforced server-side.
-  useEffect(() => {
-    if (uid && subscriptionTier === 'free') {
-      localStorage.setItem('dressflow_ai_remaining_' + uid, String(aiGensRemaining));
-    }
-  }, [uid, subscriptionTier, aiGensRemaining]);
-
   useEffect(() => { 
     checkUserSession().catch((err) => toast.error(err.message || 'Erreur de session.'));
     CapApp.addListener('appUrlOpen', async data => {
@@ -860,7 +853,7 @@ function App() {
   const isMainView = ['dashboard', 'stylist', 'trip', 'settings'].includes(view)
 
   return (
-    <div id="root">
+    <div className="app-root-wrapper" style={{ width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       <Toaster 
         position="top-center" 
         containerStyle={{
