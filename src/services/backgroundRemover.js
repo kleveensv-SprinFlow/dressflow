@@ -118,7 +118,7 @@ async function renderSession(session, group) {
     workW: session.workW,
     workH: session.workH,
     group,
-    contract: 2,
+    contract: 1,
     softness: 0
   })
   if (cut.coverage < 0.008) throw new Error('Aucun vêtement de cette catégorie')
