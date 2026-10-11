@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, MapPinned, Info, Trash2, AlertCircle, Loader2, Tag, Palette } from 'lucide-react';
+import { X, Search, MapPinned, Info, Trash2, AlertCircle, Loader2, Tag, Palette, Sparkles } from 'lucide-react';
 import { ChoiceSelector, SearchSelector, ColorPalette } from './UIElements';
 import { ALL_SEASONS, ALL_ACTIVITIES, getSeasonIcon, getActivityIcon, MAIN_CATEGORIES, CATEGORY_HIERARCHY, getIconForType } from '../utils/helpers.jsx';
 
