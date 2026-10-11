@@ -17,38 +17,38 @@ const SILHOUETTE_SLOTS = [
 // Hauteur fixe sur la silhouette, en pixels. La photo ne décide plus de la taille :
 // deux t-shirts font la même hauteur, un pantalon est plus long, des baskets restent petites.
 const GARMENT_HEIGHT = {
-  'Casquette': 58,
-  'Bonnet': 62,
-  'Chapeau': 70,
-  'Bob': 58,
-  'T-shirt': 136,
-  'Top / Blouse': 130,
-  'Chemise': 148,
-  'Pull': 142,
-  'Sweat': 144,
-  'Veste': 150,
-  'Manteau': 168,
-  'Robe': 210,
-  'Pantalon': 158,
-  'Jean': 158,
-  'Jogging': 152,
-  'Legging': 152,
-  'Short': 108,
-  'Jupe': 124,
-  'Baskets': 64,
-  'Ville': 64,
-  'Sandales': 56,
-  'Talons': 68,
-  'Bottes': 96,
-  'Sac': 110
+  'Casquette': 78,
+  'Bonnet': 82,
+  'Chapeau': 92,
+  'Bob': 78,
+  'T-shirt': 188,
+  'Top / Blouse': 180,
+  'Chemise': 204,
+  'Pull': 196,
+  'Sweat': 198,
+  'Veste': 206,
+  'Manteau': 228,
+  'Robe': 280,
+  'Pantalon': 214,
+  'Jean': 214,
+  'Jogging': 206,
+  'Legging': 206,
+  'Short': 146,
+  'Jupe': 168,
+  'Baskets': 88,
+  'Ville': 88,
+  'Sandales': 78,
+  'Talons': 94,
+  'Bottes': 128,
+  'Sac': 140
 };
 
-const SLOT_HEIGHT = { head: 64, layer: 150, top: 136, bottom: 158, feet: 64, bag: 110 };
-const TALLEST = 210;
+const SLOT_HEIGHT = { head: 86, layer: 206, top: 188, bottom: 214, feet: 88, bag: 140 };
+const TALLEST = 280;
 
 function garmentHeight(item, slot) {
   if (item?.type && GARMENT_HEIGHT[item.type]) return GARMENT_HEIGHT[item.type];
-  return SLOT_HEIGHT[slot?.key] || 136;
+  return SLOT_HEIGHT[slot?.key] || 188;
 }
 
 export default function StylistView({
@@ -187,13 +187,7 @@ export default function StylistView({
       ) : (
         <>
           {/* Rangées façon Whering : la pièce d’avant et la suivante dépassent, sans se chevaucher. */}
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '28px',
-            padding: '1.2rem 0 1rem',
-            marginBottom: '1.5rem',
-            overflow: 'hidden'
-          }}>
+          <div style={{ marginBottom: '1rem', overflow: 'hidden' }}>
             {SILHOUETTE_SLOTS.map(slot => {
               const item = getActiveItem(slot.key);
               const pool = getSlotPool(slot.key);
@@ -242,7 +236,7 @@ export default function StylistView({
                     style={{
                       height: h,
                       width: 'auto',
-                      maxWidth: faded ? 96 : 168,
+                      maxWidth: faded ? 120 : 240,
                       objectFit: 'contain',
                       opacity: faded ? 0.4 : 1,
                       filter: faded ? 'none' : 'drop-shadow(0 8px 12px rgba(45, 38, 35, 0.12))',
@@ -265,7 +259,7 @@ export default function StylistView({
                   }}
                   style={{
                     height,
-                    marginBottom: 22,
+                    marginBottom: 4,
                     display: 'grid',
                     gridTemplateColumns: '1fr auto 1fr',
                     alignItems: 'center',
