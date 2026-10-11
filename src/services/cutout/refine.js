@@ -252,49 +252,60 @@ function fillSmallHoles(bin, w, h, maxHole) {
   }
   return out;
 }
-function peelBackgroundFringe(bin, photo, w, h) {
-  let cur = bin;
-  for (let pass = 0; pass < 4; pass++) {
-    const next = cur.slice();
-    let removed = 0;
-    for (let y = 1; y < h - 1; y++) {
-      const row = y * w;
-      for (let x = 1; x < w - 1; x++) {
-        const i = row + x;
-        if (!cur[i]) continue;
-        if (cur[i - 1] && cur[i + 1] && cur[i - w] && cur[i + w]) continue;
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        let n = 0;
-        const y0 = Math.max(0, y - 3);
-        const y1 = Math.min(h - 1, y + 3);
-        const x0 = Math.max(0, x - 3);
-        const x1 = Math.min(w - 1, x + 3);
-        for (let yy = y0; yy <= y1; yy++) {
-          for (let xx = x0; xx <= x1; xx++) {
-            const j = yy * w + xx;
-            if (cur[j]) continue;
-            const o = j * 4;
-            r += photo[o];
-            g += photo[o + 1];
-            b += photo[o + 2];
-            n++;
+function refineEdgeBand(bin, photo, w, h, radius) {
+  const sureFg = erodeBin(bin, w, h, radius);
+  const reach = dilateBin(bin, w, h, radius);
+  const out = bin.slice();
+  const win = Math.max(4, Math.round(radius * 0.8));
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (sureFg[i]) {
+        out[i] = 1;
+        continue;
+      }
+      if (!reach[i]) {
+        out[i] = 0;
+        continue;
+      }
+      let fr = 0;
+      let fg = 0;
+      let fb = 0;
+      let fn = 0;
+      let br = 0;
+      let bg = 0;
+      let bb = 0;
+      let bn = 0;
+      const y0 = Math.max(0, y - win);
+      const y1 = Math.min(h - 1, y + win);
+      const x0 = Math.max(0, x - win);
+      const x1 = Math.min(w - 1, x + win);
+      for (let yy = y0; yy <= y1; yy++) {
+        for (let xx = x0; xx <= x1; xx++) {
+          const j = yy * w + xx;
+          const o = j * 4;
+          if (sureFg[j]) {
+            fr += photo[o];
+            fg += photo[o + 1];
+            fb += photo[o + 2];
+            fn++;
+          } else if (!reach[j]) {
+            br += photo[o];
+            bg += photo[o + 1];
+            bb += photo[o + 2];
+            bn++;
           }
         }
-        if (n < 4) continue;
-        const o = i * 4;
-        const dist = Math.hypot(photo[o] - r / n, photo[o + 1] - g / n, photo[o + 2] - b / n);
-        if (dist < 22) {
-          next[i] = 0;
-          removed++;
-        }
       }
+      if (fn < 3 || bn < 3) continue;
+      const o = i * 4;
+      const dFg = Math.hypot(photo[o] - fr / fn, photo[o + 1] - fg / fn, photo[o + 2] - fb / fn);
+      const dBg = Math.hypot(photo[o] - br / bn, photo[o + 1] - bg / bn, photo[o + 2] - bb / bn);
+      if (dFg + 14 < dBg) out[i] = 1;
+      else if (dBg + 14 < dFg) out[i] = 0;
     }
-    cur = next;
-    if (removed < 8) break;
   }
-  return cur;
+  return out;
 }
 function boxMean(src, w, h, r) {
   const iw = w + 1;
@@ -495,14 +506,8 @@ function clampByte(v) {
   return Math.round(v);
 }
 function alphaFromBinary(bin, guide, w, h, softness) {
-  const n = w * h;
-  const src = new Float32Array(n);
-  for (let i = 0; i < n; i++) src[i] = bin[i] ? 1 : 0;
-  const radius = 2;
-  let q = guidedFilter(guide, src, w, h, radius, 8e-4);
-  if (softness > 0) q = boxMean(q, w, h, softness);
-  const alpha = new Uint8Array(n);
-  for (let i = 0; i < n; i++) alpha[i] = q[i] >= 0.5 ? 255 : 0;
+  const alpha = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) alpha[i] = bin[i] ? 255 : 0;
   return alpha;
 }
 function buildCutout(options) {
@@ -521,8 +526,9 @@ function buildCutout(options) {
   bin = keepLarge(bin, workW, workH, 0.02);
   const maxHole = Math.floor(workW * workH * 0.12);
   bin = fillSmallHoles(bin, workW, workH, maxHole);
-  bin = erodeBin(dilateBin(bin, workW, workH, 3), workW, workH, 3);
-  bin = peelBackgroundFringe(bin, photo, workW, workH);
+  bin = refineEdgeBand(bin, photo, workW, workH, 10);
+  bin = refineEdgeBand(bin, photo, workW, workH, 5);
+  bin = fillSmallHoles(bin, workW, workH, maxHole);
   bin = keepLarge(bin, workW, workH, 0.05);
   const contract = Math.max(0, Math.round(options.contract));
   let edged = contract ? erodeBin(bin, workW, workH, contract) : bin;
