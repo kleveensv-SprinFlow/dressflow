@@ -8,6 +8,7 @@
     "build": "vite build",
     "test": "node --test",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "postinstall": "node -e \"const fs=require('fs'); const path=require('path'); const src=path.join('node_modules','@imgly','background-removal-data','dist'); const dest=path.join('public','imgly-data'); if(fs.existsSync(src)){fs.mkdirSync(dest,{recursive:true}); fs.cpSync(src,dest,{recursive:true});}\"",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -17,6 +18,8 @@
     "@capacitor/core": "^8.3.1",
     "@capacitor/filesystem": "^8.1.4",
     "@capacitor/haptics": "^8.0.2",
+    "@imgly/background-removal": "^1.7.0",
+    "@imgly/background-removal-data": "^1.4.5",
     "@supabase/supabase-js": "^2.39.7",
     "@tensorflow-models/mobilenet": "^2.1.1",
     "@tensorflow/tfjs": "^4.22.0",

@@ -31,3 +31,5 @@ dist-ssr
 .env.production.local
 
 *.nosync
+public/imgly-data/
+android/app/src/main/assets/public/imgly-data/
