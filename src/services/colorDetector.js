@@ -69,15 +69,19 @@ export const detectDominantColor = async (imageFile) => {
     canvas.height = size;
     ctx.drawImage(img, 0, 0, size, size);
 
-    // Échantillonne 25 points au centre pour mesurer moyenne + variance de luminosité
+    // Échantillonne la grille pour mesurer moyenne + variance de luminosité
+    // Ignore strictement les pixels transparents (alpha < 120) pour les images détourées
     const samples = [];
-    const minCoord = Math.floor(size * 0.35);
-    const maxCoord = Math.floor(size * 0.65);
-    const step = 4;
+    const minCoord = Math.floor(size * 0.2);
+    const maxCoord = Math.floor(size * 0.8);
+    const step = 3;
 
     for (let x = minCoord; x <= maxCoord; x += step) {
       for (let y = minCoord; y <= maxCoord; y += step) {
         const pixel = ctx.getImageData(x, y, 1, 1).data;
+        const a = pixel[3];
+        if (a < 120) continue; // Pixel transparent ignoré
+
         const r = pixel[0];
         const g = pixel[1];
         const b = pixel[2];

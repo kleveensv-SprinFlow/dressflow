@@ -120,41 +120,246 @@ const StylistView = ({
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.8rem' }}>
-                {visibleParts.map(({ key, label }) => {
-                  const item = currentOutfit[key];
-                  const lockedValue = lockedOutfit?.[key];
-                  const lockedId = typeof lockedValue === 'object' ? lockedValue?.id : lockedValue;
-                  const isLocked = lockedId != null && String(lockedId) === String(item.id);
-                  return (
-                    <div key={key} className="glass-card" style={{ padding: '10px', position: 'relative', minWidth: 0 }}>
-                      <div style={{ aspectRatio: '1', borderRadius: '15px', overflow: 'hidden', background: 'white', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {item.image_url
-                          ? <img src={item.image_url} alt={item.type || label} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={() => onImageError?.(item)} />
-                          : <span style={{ fontSize: '3rem' }}>{item.icon || '👕'}</span>}
+              {/* PLANCHE VERTICALE LOOKBOOK FAÇON WHERING */}
+              <div style={{
+                background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+                borderRadius: '28px',
+                padding: '1.2rem 1rem',
+                border: '1px solid rgba(0,0,0,0.06)',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.04)',
+                position: 'relative'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.8rem',
+                  position: 'relative'
+                }}>
+                  {/* COUCHE EXTÉRIEURE / VESTE (si présente) */}
+                  {currentOutfit.layer && (
+                    <div style={{ position: 'relative', width: '65%', maxWidth: '220px', zIndex: 3 }}>
+                      <div style={{
+                        aspectRatio: '1.1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {currentOutfit.layer.image_url ? (
+                          <img
+                            src={currentOutfit.layer.image_url}
+                            alt={currentOutfit.layer.type}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'contain',
+                              filter: 'drop-shadow(0 10px 18px rgba(0,0,0,0.12))'
+                            }}
+                            onError={() => onImageError?.(currentOutfit.layer)}
+                          />
+                        ) : (
+                          <span style={{ fontSize: '3.5rem' }}>{currentOutfit.layer.icon || '🧥'}</span>
+                        )}
                       </div>
-                      <div style={{ fontSize: '0.62rem', opacity: 0.6, textAlign: 'center', marginBottom: '3px' }}>{label}</div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 800, textAlign: 'center', overflowWrap: 'anywhere' }}>{item.type}</div>
-                      {item.color && <div style={{ fontSize: '0.72rem', textAlign: 'center', opacity: 0.7 }}>{item.color}</div>}
+                      {/* Cadenas */}
                       <button
                         type="button"
-                        aria-label={isLocked ? `Déverrouiller ${item.type}` : `Garder ${item.type} lors du prochain look`}
-                        aria-pressed={isLocked}
-                        onClick={() => setLockedOutfit({ ...lockedOutfit, [key]: isLocked ? null : item.id })}
+                        aria-label="Verrouiller veste"
+                        onClick={() => {
+                          const isLocked = lockedOutfit?.layer != null && String(lockedOutfit.layer) === String(currentOutfit.layer.id);
+                          setLockedOutfit({ ...lockedOutfit, layer: isLocked ? null : currentOutfit.layer.id });
+                        }}
                         style={{
-                          position: 'absolute', top: '5px', right: '5px',
-                          background: isLocked ? 'var(--primary)' : 'rgba(255,255,255,0.92)',
-                          border: 'none', borderRadius: '50%', width: '34px', height: '34px',
+                          position: 'absolute', top: '0', right: '0',
+                          background: (lockedOutfit?.layer && String(lockedOutfit.layer) === String(currentOutfit.layer.id)) ? 'var(--primary)' : 'rgba(255,255,255,0.95)',
+                          border: 'none', borderRadius: '50%', width: '32px', height: '32px',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: isLocked ? 'white' : 'var(--primary)',
-                          boxShadow: '0 2px 10px rgba(0,0,0,0.1)', cursor: 'pointer'
+                          color: (lockedOutfit?.layer && String(lockedOutfit.layer) === String(currentOutfit.layer.id)) ? 'white' : 'var(--primary)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)', cursor: 'pointer'
                         }}
                       >
-                        {isLocked ? <Lock size={15} /> : <Unlock size={15} />}
+                        {(lockedOutfit?.layer && String(lockedOutfit.layer) === String(currentOutfit.layer.id)) ? <Lock size={14} /> : <Unlock size={14} />}
                       </button>
                     </div>
-                  );
-                })}
+                  )}
+
+                  {/* HAUT / ROBE (Pièce maîtresse) */}
+                  {currentOutfit.top && (
+                    <div style={{ position: 'relative', width: '65%', maxWidth: '220px', zIndex: 2 }}>
+                      <div style={{
+                        aspectRatio: '1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {currentOutfit.top.image_url ? (
+                          <img
+                            src={currentOutfit.top.image_url}
+                            alt={currentOutfit.top.type}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'contain',
+                              filter: 'drop-shadow(0 10px 18px rgba(0,0,0,0.12))'
+                            }}
+                            onError={() => onImageError?.(currentOutfit.top)}
+                          />
+                        ) : (
+                          <span style={{ fontSize: '4rem' }}>{currentOutfit.top.icon || '👕'}</span>
+                        )}
+                      </div>
+                      {/* Cadenas */}
+                      <button
+                        type="button"
+                        aria-label="Verrouiller haut"
+                        onClick={() => {
+                          const isLocked = lockedOutfit?.top != null && String(lockedOutfit.top) === String(currentOutfit.top.id);
+                          setLockedOutfit({ ...lockedOutfit, top: isLocked ? null : currentOutfit.top.id });
+                        }}
+                        style={{
+                          position: 'absolute', top: '0', right: '0',
+                          background: (lockedOutfit?.top && String(lockedOutfit.top) === String(currentOutfit.top.id)) ? 'var(--primary)' : 'rgba(255,255,255,0.95)',
+                          border: 'none', borderRadius: '50%', width: '32px', height: '32px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: (lockedOutfit?.top && String(lockedOutfit.top) === String(currentOutfit.top.id)) ? 'white' : 'var(--primary)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)', cursor: 'pointer'
+                        }}
+                      >
+                        {(lockedOutfit?.top && String(lockedOutfit.top) === String(currentOutfit.top.id)) ? <Lock size={14} /> : <Unlock size={14} />}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* BAS (Pantalon, jean, jupe) */}
+                  {currentOutfit.bottom && (
+                    <div style={{ position: 'relative', width: '58%', maxWidth: '190px', zIndex: 1, marginTop: '-15px' }}>
+                      <div style={{
+                        aspectRatio: '1.05',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {currentOutfit.bottom.image_url ? (
+                          <img
+                            src={currentOutfit.bottom.image_url}
+                            alt={currentOutfit.bottom.type}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'contain',
+                              filter: 'drop-shadow(0 10px 18px rgba(0,0,0,0.12))'
+                            }}
+                            onError={() => onImageError?.(currentOutfit.bottom)}
+                          />
+                        ) : (
+                          <span style={{ fontSize: '3.8rem' }}>{currentOutfit.bottom.icon || '👖'}</span>
+                        )}
+                      </div>
+                      {/* Cadenas */}
+                      <button
+                        type="button"
+                        aria-label="Verrouiller bas"
+                        onClick={() => {
+                          const isLocked = lockedOutfit?.bottom != null && String(lockedOutfit.bottom) === String(currentOutfit.bottom.id);
+                          setLockedOutfit({ ...lockedOutfit, bottom: isLocked ? null : currentOutfit.bottom.id });
+                        }}
+                        style={{
+                          position: 'absolute', top: '0', right: '0',
+                          background: (lockedOutfit?.bottom && String(lockedOutfit.bottom) === String(currentOutfit.bottom.id)) ? 'var(--primary)' : 'rgba(255,255,255,0.95)',
+                          border: 'none', borderRadius: '50%', width: '32px', height: '32px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: (lockedOutfit?.bottom && String(lockedOutfit.bottom) === String(currentOutfit.bottom.id)) ? 'white' : 'var(--primary)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)', cursor: 'pointer'
+                        }}
+                      >
+                        {(lockedOutfit?.bottom && String(lockedOutfit.bottom) === String(currentOutfit.bottom.id)) ? <Lock size={14} /> : <Unlock size={14} />}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* CHAUSSURES (En bas) */}
+                  {currentOutfit.feet && (
+                    <div style={{ position: 'relative', width: '48%', maxWidth: '160px', marginTop: '-10px' }}>
+                      <div style={{
+                        aspectRatio: '1.2',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {currentOutfit.feet.image_url ? (
+                          <img
+                            src={currentOutfit.feet.image_url}
+                            alt={currentOutfit.feet.type}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'contain',
+                              filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.12))'
+                            }}
+                            onError={() => onImageError?.(currentOutfit.feet)}
+                          />
+                        ) : (
+                          <span style={{ fontSize: '3rem' }}>{currentOutfit.feet.icon || '👟'}</span>
+                        )}
+                      </div>
+                      {/* Cadenas */}
+                      <button
+                        type="button"
+                        aria-label="Verrouiller chaussures"
+                        onClick={() => {
+                          const isLocked = lockedOutfit?.feet != null && String(lockedOutfit.feet) === String(currentOutfit.feet.id);
+                          setLockedOutfit({ ...lockedOutfit, feet: isLocked ? null : currentOutfit.feet.id });
+                        }}
+                        style={{
+                          position: 'absolute', top: '0', right: '0',
+                          background: (lockedOutfit?.feet && String(lockedOutfit.feet) === String(currentOutfit.feet.id)) ? 'var(--primary)' : 'rgba(255,255,255,0.95)',
+                          border: 'none', borderRadius: '50%', width: '30px', height: '30px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: (lockedOutfit?.feet && String(lockedOutfit.feet) === String(currentOutfit.feet.id)) ? 'white' : 'var(--primary)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)', cursor: 'pointer'
+                        }}
+                      >
+                        {(lockedOutfit?.feet && String(lockedOutfit.feet) === String(currentOutfit.feet.id)) ? <Lock size={13} /> : <Unlock size={13} />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* PUCE DÉTAILS DE LA PLANCHE */}
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  justifyContent: 'center',
+                  marginTop: '1.2rem',
+                  paddingTop: '0.8rem',
+                  borderTop: '1px solid rgba(0,0,0,0.06)'
+                }}>
+                  {visibleParts.map(({ key, label }) => {
+                    const item = currentOutfit[key];
+                    return (
+                      <span
+                        key={key}
+                        style={{
+                          background: 'white',
+                          padding: '5px 10px',
+                          borderRadius: '10px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: 'var(--text-main)',
+                          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <span style={{ opacity: 0.5 }}>{label}:</span>
+                        <span>{item.type}</span>
+                        {item.color && <span style={{ opacity: 0.6 }}>• {item.color}</span>}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>

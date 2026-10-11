@@ -15,6 +15,11 @@ const AddClothingView = ({
   handleBulkAdd,
   loading,
   selectedImage,
+  originalImage,
+  useCutout,
+  setUseCutout,
+  isProcessingCutout,
+  bulkProgress,
   newItem,
   setNewItem,
   handleAddItem,
@@ -22,24 +27,55 @@ const AddClothingView = ({
 }) => {
   if (view === 'add-choice') {
     return (
-      <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: '2rem' }}>
+      <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: '1.5rem' }}>
         <header style={{ textAlign: 'center' }}>
-          <h2 className="title" style={{ fontSize: '2rem' }}>Ajouter un vêtement</h2>
-          <p className="subtitle">Prends une photo ou choisis dans ta galerie</p>
+          <h2 className="title" style={{ fontSize: '1.9rem', letterSpacing: '-0.5px' }}>Ajouter une pièce</h2>
+          <p className="subtitle" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Détourage automatique et silhouette propre ✨</p>
         </header>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-          <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed var(--primary)', cursor: 'pointer' }}>
-            <div style={{ background: 'var(--primary)', color: 'white', padding: '20px', borderRadius: '25px' }}><Camera size={35} /></div>
-            <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--primary)' }}>PHOTO</div>
+
+        {/* CONSEIL PHOTO FAÇON WHERING */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(var(--primary-rgb), 0.15)',
+          borderRadius: '20px',
+          padding: '1rem 1.1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '14px',
+            background: 'rgba(var(--primary-rgb), 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.3rem',
+            flexShrink: 0
+          }}>
+            💡
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.45 }}>
+            <strong>Conseil photo :</strong> Pose ton vêtement à plat sur ton lit/table ou suspends-le sur un cintre. Le fond sera automatiquement retiré !
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+          <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed var(--primary)', cursor: 'pointer', background: 'white' }}>
+            <div style={{ background: 'var(--primary)', color: 'white', padding: '18px', borderRadius: '22px' }}><Camera size={32} /></div>
+            <div style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--primary)', marginTop: '8px' }}>PHOTO</div>
           </motion.button>
-          <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => galleryInputRef.current?.click()} style={{ cursor: 'pointer' }}>
-            <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', padding: '20px', borderRadius: '25px' }}><ImageIcon size={35} /></div>
-            <div style={{ fontWeight: 800, fontSize: '0.9rem', opacity: 0.6 }}>GALERIE</div>
+          <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => galleryInputRef.current?.click()} style={{ cursor: 'pointer', background: 'white' }}>
+            <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', padding: '18px', borderRadius: '22px' }}><ImageIcon size={32} /></div>
+            <div style={{ fontWeight: 800, fontSize: '0.85rem', opacity: 0.7, marginTop: '8px' }}>GALERIE</div>
           </motion.button>
           <input type="file" ref={fileInputRef} hidden accept="image/*" capture="environment" onChange={handleFileChange} />
           <input type="file" ref={galleryInputRef} hidden accept="image/*" multiple onChange={handleFileChange} />
         </div>
-        <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ border: 'none', background: 'none' }} onClick={() => setView('dashboard')}>Annuler</motion.button>
+        <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ border: 'none', background: 'none', fontSize: '0.9rem' }} onClick={() => setView('dashboard')}>Annuler</motion.button>
       </motion.div>
     );
   }
@@ -47,13 +83,81 @@ const AddClothingView = ({
   if (view === 'bulk-add') {
     return (
       <motion.div key="bulk-add" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container" style={{ width: '100%' }}>
-        <header style={{ marginBottom: '1.5rem' }}><h2 className="title">Ajout groupé</h2><p className="subtitle">{bulkItems.length} vêtements sélectionnés</p></header>
+        <header style={{ marginBottom: '1.5rem' }}>
+          <h2 className="title">Ajout groupé</h2>
+          <p className="subtitle">{bulkItems.length} vêtements sélectionnés</p>
+
+          {/* BARRE DE PROGRESSION DU DÉTOURAGE PAR LOT */}
+          {bulkProgress && bulkProgress.total > 0 && bulkProgress.done < bulkProgress.total && (
+            <div style={{ marginTop: '1rem', background: 'white', padding: '12px 16px', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700, marginBottom: '6px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Loader2 className="animate-spin" size={14} color="var(--primary)" />
+                  Détourage automatique en cours…
+                </span>
+                <span style={{ color: 'var(--primary)' }}>{bulkProgress.done} / {bulkProgress.total}</span>
+              </div>
+              <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${Math.round((bulkProgress.done / bulkProgress.total) * 100)}%`,
+                  height: '100%',
+                  background: 'var(--primary)',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
+          )}
+        </header>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '140px' }}>
           {bulkItems.map((item, idx) => (
             <div key={idx} className="glass-card" style={{ padding: '1.2rem' }}>
               <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                <div style={{ width: '80px', height: '80px', borderRadius: '15px', overflow: 'hidden', background: 'white', border: '1px solid rgba(0,0,0,0.05)' }}><img src={item.preview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Aperçu vêtement" /></div>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '15px',
+                  overflow: 'hidden',
+                  background: item.useCutout
+                    ? 'repeating-conic-gradient(#f1f5f9 0% 25%, #ffffff 0% 50%) 50% / 12px 12px'
+                    : 'white',
+                  border: '1px solid rgba(0,0,0,0.05)',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <img
+                    src={item.useCutout && item.cutoutPreview ? item.cutoutPreview : item.preview}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', padding: item.useCutout ? '4px' : '0' }}
+                    alt="Aperçu vêtement"
+                  />
+                </div>
                 <div style={{ flex: 1 }}>
+                  {item.cutoutPreview && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newBulk = [...bulkItems];
+                          newBulk[idx] = { ...newBulk[idx], useCutout: !newBulk[idx].useCutout };
+                          setBulkItems(newBulk);
+                        }}
+                        style={{
+                          fontSize: '0.62rem',
+                          fontWeight: 800,
+                          padding: '3px 8px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: item.useCutout ? 'rgba(var(--primary-rgb), 0.12)' : '#f1f5f9',
+                          color: item.useCutout ? 'var(--primary)' : 'var(--text-muted)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {item.useCutout ? '✨ Fond retiré' : 'Photo d’origine'}
+                      </button>
+                    </div>
+                  )}
                   <div style={{ marginBottom: '10px' }}>
                     <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>CATÉGORIE</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -122,12 +226,93 @@ const AddClothingView = ({
           <h2 className="title" style={{ fontSize: '1.8rem' }}>Détails du vêtement</h2>
         </header>
 
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: '35px', overflow: 'hidden', background: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.08)', marginBottom: '1.5rem' }}>
-          <img src={selectedImage} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Aperçu du vêtement sélectionné" />
+        {/* APERÇU PHOTO AVEC EFFET DAMIER POUR TRANSPARENCE */}
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '1',
+          borderRadius: '35px',
+          overflow: 'hidden',
+          background: useCutout
+            ? 'repeating-conic-gradient(#f1f5f9 0% 25%, #ffffff 0% 50%) 50% / 20px 20px'
+            : 'white',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.08)',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {isProcessingCutout ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <Loader2 className="animate-spin" size={36} color="var(--primary)" />
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>Détourage en cours…</span>
+            </div>
+          ) : (
+            <img
+              src={selectedImage}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                padding: useCutout ? '12px' : '0',
+                filter: useCutout ? 'drop-shadow(0 8px 16px rgba(0,0,0,0.12))' : 'none'
+              }}
+              alt="Aperçu du vêtement sélectionné"
+            />
+          )}
+
           <div className="ai-badge" style={{ background: 'white', color: 'var(--text-main)', border: '1px solid rgba(0,0,0,0.08)' }}>
-            PHOTO ENREGISTRÉE
+            {useCutout ? '✨ FOND RETIRÉ' : 'PHOTO D’ORIGINE'}
           </div>
         </div>
+
+        {/* INTERRUPTEUR DÉTOURÉE / ORIGINALE SI DÉTOURAGE DISPONIBLE */}
+        {originalImage && selectedImage && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.2rem' }}>
+            <div style={{
+              display: 'inline-flex',
+              background: '#e2e8f0',
+              padding: '4px',
+              borderRadius: '16px',
+              gap: '4px'
+            }}>
+              <button
+                type="button"
+                onClick={() => setUseCutout?.(true)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: useCutout ? 'white' : 'transparent',
+                  fontWeight: 800,
+                  fontSize: '0.75rem',
+                  color: useCutout ? 'var(--primary)' : 'var(--text-muted)',
+                  boxShadow: useCutout ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                ✨ Fond retiré
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseCutout?.(false)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: !useCutout ? 'white' : 'transparent',
+                  fontWeight: 800,
+                  fontSize: '0.75rem',
+                  color: !useCutout ? 'var(--text-main)' : 'var(--text-muted)',
+                  boxShadow: !useCutout ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Photo d’origine
+              </button>
+            </div>
+          </div>
+        )}
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.8rem' }}>
           {/* 1. CATÉGORIE */}

@@ -14,6 +14,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import './styles/index.css'
 import { supabase } from './lib/supabase'
 import { detectDominantColor } from './services/colorDetector'
+import { removeBackground } from './services/backgroundRemover'
 import { generateOutfit } from './services/styleEngine.js'
 import { getLocalWeather, searchCity } from './services/weather'
 
@@ -103,7 +104,13 @@ function App() {
 
   const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', pattern: 'Uni', season: [currentSeason()], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
+  const [originalImage, setOriginalImage] = useState(null)
+  const [useCutout, setUseCutout] = useState(true)
+  const [isProcessingCutout, setIsProcessingCutout] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 })
   const [tempFile, setTempFile] = useState(null)
+  const [originalFile, setOriginalFile] = useState(null)
+  const [cutoutFile, setCutoutFile] = useState(null)
 
   const filteredItems = useMemo(() => {
     let result = [...items];
@@ -701,36 +708,95 @@ function App() {
     try {
       if (acceptedFiles.length === 1) {
         const file = acceptedFiles[0];
+        setOriginalFile(file);
         setTempFile(file);
-        setSelectedImage(URL.createObjectURL(file));
-        const detected = await detectDominantColor(file);
-        setNewItem(prev => ({
-          main_category: prev.main_category || null,
-          type: prev.type || '',
-          color: detected?.color || 'Blanc',
-          pattern: detected?.pattern || 'Uni',
+        const origUrl = URL.createObjectURL(file);
+        setOriginalImage(origUrl);
+        setSelectedImage(origUrl);
+        setUseCutout(false);
+        setIsProcessingCutout(true);
+        setView('add-detail');
+
+        // Lancement asynchrone du détourage pour ne pas bloquer l'affichage
+        (async () => {
+          try {
+            const { file: processed, removed } = await removeBackground(file);
+            if (removed) {
+              setCutoutFile(processed);
+              setTempFile(processed);
+              const cutUrl = URL.createObjectURL(processed);
+              setSelectedImage(cutUrl);
+              setUseCutout(true);
+              const detected = await detectDominantColor(processed);
+              setNewItem(prev => ({
+                ...prev,
+                color: detected?.color || prev.color,
+                pattern: detected?.pattern || prev.pattern
+              }));
+            } else {
+              const detected = await detectDominantColor(file);
+              setNewItem(prev => ({
+                ...prev,
+                color: detected?.color || prev.color,
+                pattern: detected?.pattern || prev.pattern
+              }));
+            }
+          } catch (e) {
+            console.warn("Détourage silencieux échoué:", e);
+          } finally {
+            setIsProcessingCutout(false);
+          }
+        })();
+      } else {
+        // Ajout groupé : initialisation immédiate
+        const initialBulk = acceptedFiles.map(file => ({
+          file,
+          originalFile: file,
+          cutoutFile: null,
+          useCutout: false,
+          preview: URL.createObjectURL(file),
+          cutoutPreview: null,
+          main_category: 'Haut',
+          type: 'T-shirt',
+          color: 'Blanc',
+          pattern: 'Uni',
           season: [currentSeason()],
           activity: ['Quotidien'],
-          icon: prev.icon || '👕'
-        }));
-        setView('add-detail');
-      } else {
-        const initialBulk = await Promise.all(acceptedFiles.map(async file => {
-          const detected = await detectDominantColor(file);
-          return {
-            file,
-            preview: URL.createObjectURL(file),
-            main_category: 'Haut',
-            type: 'T-shirt',
-            color: detected?.color || 'Blanc',
-            pattern: detected?.pattern || 'Uni',
-            season: [currentSeason()],
-            activity: ['Quotidien'],
-            icon: '👕'
-          };
+          icon: '👕'
         }));
         setBulkItems(initialBulk);
+        setBulkProgress({ done: 0, total: acceptedFiles.length });
         setView('bulk-add');
+
+        // Traitement séquentiel en arrière-plan pour ménager les ressources
+        (async () => {
+          for (let i = 0; i < acceptedFiles.length; i++) {
+            const f = acceptedFiles[i];
+            try {
+              const { file: cutF, removed } = await removeBackground(f);
+              const activeF = removed ? cutF : f;
+              const detected = await detectDominantColor(activeF);
+              setBulkItems(prev => {
+                const next = [...prev];
+                if (next[i]) {
+                  next[i] = {
+                    ...next[i],
+                    file: activeF,
+                    cutoutFile: removed ? cutF : null,
+                    useCutout: removed,
+                    cutoutPreview: removed ? URL.createObjectURL(cutF) : null,
+                    color: detected?.color || 'Blanc',
+                    pattern: detected?.pattern || 'Uni'
+                  };
+                }
+                return next;
+              });
+            } catch (err) {
+              console.warn("Erreur sur item bulk:", err);
+            }
+            setBulkProgress({ done: i + 1, total: acceptedFiles.length });
+          }
+        })();
       }
     } finally {
       setLoading(false);
@@ -754,9 +820,10 @@ function App() {
     let completed = 0;
     try {
       for (const item of bulkItems) {
-        const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileToUpload = (item.useCutout && item.cutoutFile) ? item.cutoutFile : (item.originalFile || item.file);
+        const safeName = fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
-        const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, item.file, { contentType: item.file.type, upsert: false });
+        const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, fileToUpload, { contentType: fileToUpload.type, upsert: false });
         if (uploadError) throw uploadError;
         const { error: insertError } = await supabase.from('clothes').insert([{
           profile_id: uid,
@@ -805,10 +872,11 @@ function App() {
     setLoading(true);
     let uploadedPath = null;
     try {
-      const safeName = tempFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const fileToUpload = useCutout && cutoutFile ? cutoutFile : (originalFile || tempFile);
+      const safeName = fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
       uploadedPath = fileName;
-      const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, tempFile, { contentType: tempFile.type, upsert: false });
+      const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, fileToUpload, { contentType: fileToUpload.type, upsert: false });
       if (uploadError) throw uploadError;
       const { error: insertError } = await supabase.from('clothes').insert([{
         profile_id: uid,
@@ -819,7 +887,13 @@ function App() {
         image_url: fileName
       }]);
       if (insertError) throw insertError;
-      await fetchItems(uid); setView('dashboard'); setSelectedImage(null); setTempFile(null)
+      await fetchItems(uid);
+      setView('dashboard');
+      setSelectedImage(null);
+      setOriginalImage(null);
+      setTempFile(null);
+      setOriginalFile(null);
+      setCutoutFile(null);
       toast.success("Ajouté avec succès !");
     } catch (err) {
       if (uploadedPath) await supabase.storage.from('clothes-images').remove([uploadedPath]).catch(() => {});
@@ -989,7 +1063,30 @@ function App() {
           )}
           {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={updateTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} onTogglePacked={toggleSuitcaseItem} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
           {view === 'settings' && <SettingsView key="settings" profile={{id: uid, name, email, avatar_url: avatarUrl}} name={name} setName={setName} email={email} setEmail={setEmail} avatarPreview={avatarPreview} avatarInputRef={avatarInputRef} setTempAvatarFile={setTempAvatarFile} setAvatarPreview={setAvatarPreview} handleUpdateProfile={handleUpdateProfile} handleLogout={handleLogout} setShowDeleteModal={setShowDeleteModal} items={items} />}
-          {['add-choice', 'bulk-add', 'add-detail'].includes(view) && <AddClothingView key="add" view={view} setView={setView} fileInputRef={fileInputRef} galleryInputRef={galleryInputRef} handleFileChange={handleFileChange} bulkItems={bulkItems} setBulkItems={setBulkItems} handleBulkAdd={handleBulkAdd} loading={loading} selectedImage={selectedImage} newItem={newItem} setNewItem={setNewItem} handleAddItem={handleAddItem} getIconForType={getIconForType} />}
+          {['add-choice', 'bulk-add', 'add-detail'].includes(view) && (
+            <AddClothingView 
+              key="add" 
+              view={view} 
+              setView={setView} 
+              fileInputRef={fileInputRef} 
+              galleryInputRef={galleryInputRef} 
+              handleFileChange={handleFileChange} 
+              bulkItems={bulkItems} 
+              setBulkItems={setBulkItems} 
+              handleBulkAdd={handleBulkAdd} 
+              loading={loading} 
+              selectedImage={selectedImage} 
+              originalImage={originalImage}
+              useCutout={useCutout}
+              setUseCutout={setUseCutout}
+              isProcessingCutout={isProcessingCutout}
+              bulkProgress={bulkProgress}
+              newItem={newItem} 
+              setNewItem={setNewItem} 
+              handleAddItem={handleAddItem} 
+              getIconForType={getIconForType} 
+            />
+          )}
 
         </AnimatePresence>
 
