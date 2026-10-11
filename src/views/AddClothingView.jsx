@@ -1,8 +1,26 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Camera, Image as ImageIcon, Loader2, Layers, Tag, Palette, Sun, Briefcase, Check, Sparkles } from 'lucide-react';
+import { Camera, Image as ImageIcon, Loader2, Layers, Tag, Palette, Sun, Briefcase, Check, Sparkles, Eraser, Paintbrush } from 'lucide-react';
 import { ChoiceSelector, SearchSelector, ColorPalette } from '../components/UIElements';
+import CutoutBrush from '../components/CutoutBrush';
 import { MAIN_CATEGORIES, CATEGORY_HIERARCHY, ALL_SEASONS, ALL_ACTIVITIES, ALL_PATTERNS, getSeasonIcon, getActivityIcon } from '../utils/helpers.jsx';
+
+function toolStyle(active) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 14px',
+    borderRadius: '14px',
+    border: 'none',
+    background: active ? 'var(--primary)' : 'white',
+    color: active ? 'white' : 'var(--text-main)',
+    fontWeight: 800,
+    fontSize: '0.78rem',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    cursor: 'pointer'
+  }
+}
 
 const AddClothingView = ({
   view,
@@ -15,9 +33,6 @@ const AddClothingView = ({
   handleBulkAdd,
   loading,
   selectedImage,
-  originalImage,
-  useCutout,
-  setUseCutout,
   isProcessingCutout,
   bulkProgress,
   newItem,
@@ -25,8 +40,17 @@ const AddClothingView = ({
   handleAddItem,
   getIconForType,
   onCategoryCutout,
-  onBulkCategory
+  onBulkCategory,
+  originalFile,
+  onBrushCommit
 }) => {
+  const [fixing, setFixing] = useState(false)
+  const [tool, setTool] = useState('restore')
+  const [brush, setBrush] = useState(28)
+
+  useEffect(() => {
+    if (isProcessingCutout) setFixing(false)
+  }, [isProcessingCutout])
   if (view === 'add-choice') {
     return (
       <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: '1.5rem' }}>
@@ -120,9 +144,7 @@ const AddClothingView = ({
                   height: '80px',
                   borderRadius: '15px',
                   overflow: 'hidden',
-                  background: item.useCutout
-                    ? 'repeating-conic-gradient(#f1f5f9 0% 25%, #ffffff 0% 50%) 50% / 12px 12px'
-                    : 'white',
+                  background: 'repeating-conic-gradient(#f1f5f9 0% 25%, #ffffff 0% 50%) 50% / 12px 12px',
                   border: '1px solid rgba(0,0,0,0.05)',
                   flexShrink: 0,
                   display: 'flex',
@@ -130,36 +152,12 @@ const AddClothingView = ({
                   justifyContent: 'center'
                 }}>
                   <img
-                    src={item.useCutout && item.cutoutPreview ? item.cutoutPreview : item.preview}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', padding: item.useCutout ? '4px' : '0' }}
+                    src={item.cutoutPreview || item.preview}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', padding: item.cutoutPreview ? '4px' : '0' }}
                     alt="Aperçu vêtement"
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  {item.cutoutPreview && (
-                    <div style={{ marginBottom: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newBulk = [...bulkItems];
-                          newBulk[idx] = { ...newBulk[idx], useCutout: !newBulk[idx].useCutout };
-                          setBulkItems(newBulk);
-                        }}
-                        style={{
-                          fontSize: '0.62rem',
-                          fontWeight: 800,
-                          padding: '3px 8px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: item.useCutout ? 'rgba(var(--primary-rgb), 0.12)' : '#f1f5f9',
-                          color: item.useCutout ? 'var(--primary)' : 'var(--text-muted)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {item.useCutout ? '✨ Fond retiré' : 'Photo d’origine'}
-                      </button>
-                    </div>
-                  )}
                   <div style={{ marginBottom: '10px' }}>
                     <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>CATÉGORIE</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -238,9 +236,7 @@ const AddClothingView = ({
           aspectRatio: '1',
           borderRadius: '35px',
           overflow: 'hidden',
-          background: useCutout
-            ? 'repeating-conic-gradient(#f1f5f9 0% 25%, #ffffff 0% 50%) 50% / 20px 20px'
-            : 'white',
+          background: 'repeating-conic-gradient(#f1f5f9 0% 25%, #ffffff 0% 50%) 50% / 20px 20px',
           boxShadow: '0 20px 40px rgba(0,0,0,0.08)',
           marginBottom: '1rem',
           display: 'flex',
@@ -252,6 +248,8 @@ const AddClothingView = ({
               <Loader2 className="animate-spin" size={36} color="var(--primary)" />
               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>Détourage en cours…</span>
             </div>
+          ) : fixing && originalFile ? (
+            <CutoutBrush sourceFile={originalFile} tool={tool} radius={brush} onCommit={onBrushCommit} />
           ) : (
             <img
               src={selectedImage}
@@ -259,63 +257,65 @@ const AddClothingView = ({
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain',
-                padding: useCutout ? '12px' : '0',
-                filter: useCutout ? 'drop-shadow(0 8px 16px rgba(0,0,0,0.12))' : 'none'
+                padding: '12px',
+                filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.12))'
               }}
-              alt="Aperçu du vêtement sélectionné"
+              alt="Vêtement sans fond"
             />
           )}
 
           <div className="ai-badge" style={{ background: 'white', color: 'var(--text-main)', border: '1px solid rgba(0,0,0,0.08)' }}>
-            {useCutout ? '✨ FOND RETIRÉ' : 'PHOTO D’ORIGINE'}
+            SANS FOND
           </div>
         </div>
 
-        {/* INTERRUPTEUR DÉTOURÉE / ORIGINALE SI DÉTOURAGE DISPONIBLE */}
-        {originalImage && selectedImage && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.2rem' }}>
-            <div style={{
-              display: 'inline-flex',
-              background: '#e2e8f0',
-              padding: '4px',
-              borderRadius: '16px',
-              gap: '4px'
-            }}>
+        {!isProcessingCutout && originalFile && (
+          <div style={{ marginBottom: '1.2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={() => setUseCutout?.(true)}
+                onClick={() => setFixing((open) => !open)}
                 style={{
-                  padding: '6px 14px',
-                  borderRadius: '12px',
+                  padding: '8px 14px',
+                  borderRadius: '14px',
                   border: 'none',
-                  background: useCutout ? 'white' : 'transparent',
+                  background: fixing ? 'var(--primary)' : 'white',
+                  color: fixing ? 'white' : 'var(--text-main)',
                   fontWeight: 800,
-                  fontSize: '0.75rem',
-                  color: useCutout ? 'var(--primary)' : 'var(--text-muted)',
-                  boxShadow: useCutout ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  fontSize: '0.78rem',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                   cursor: 'pointer'
                 }}
               >
-                ✨ Fond retiré
+                {fixing ? 'Terminer' : 'Corriger'}
               </button>
-              <button
-                type="button"
-                onClick={() => setUseCutout?.(false)}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: !useCutout ? 'white' : 'transparent',
-                  fontWeight: 800,
-                  fontSize: '0.75rem',
-                  color: !useCutout ? 'var(--text-main)' : 'var(--text-muted)',
-                  boxShadow: !useCutout ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                Photo d’origine
-              </button>
+              {fixing && (
+                <>
+                  <button type="button" onClick={() => setTool('restore')} style={toolStyle(tool === 'restore')}>
+                    <Paintbrush size={14} /> Rajouter
+                  </button>
+                  <button type="button" onClick={() => setTool('erase')} style={toolStyle(tool === 'erase')}>
+                    <Eraser size={14} /> Effacer
+                  </button>
+                </>
+              )}
             </div>
+            {fixing && (
+              <div style={{ marginTop: '10px' }}>
+                <input
+                  type="range"
+                  min="16"
+                  max="64"
+                  value={brush}
+                  onChange={(event) => setBrush(Number(event.target.value))}
+                  style={{ width: '100%' }}
+                  aria-label="Taille du pinceau"
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '6px 0 0', textAlign: 'center' }}>
+                  Le bas du pantalon a sauté ? Rajoute le tissu au doigt. Un reste de décor ? Efface-le.
+                </p>
+              </div>
+            )}
           </div>
         )}
         

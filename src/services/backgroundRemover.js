@@ -122,6 +122,7 @@ async function renderSession(session, group) {
     softness: 0
   })
   if (cut.coverage < 0.008) throw new Error('Aucun vêtement de cette catégorie')
+  session.rgba = new Uint8ClampedArray(cut.rgba)
   const canvas = document.createElement('canvas')
   canvas.width = session.workW
   canvas.height = session.workH
@@ -254,4 +255,33 @@ export const removeBackground = async (file, mainCategory) => {
       reason: error?.message || 'error'
     }
   }
+}
+
+/** Pixels d’origine + découpe courante, pour corriger au doigt. */
+export function readEdit(file) {
+  const session = sessions.get(file)
+  if (!session?.rgba) return null
+  return {
+    width: session.workW,
+    height: session.workH,
+    rgba: session.rgba,
+    photo: session.photo
+  }
+}
+
+/** Enregistre le canvas corrigé et renvoie un fichier transparent rogné. */
+export async function commitEditPixels(file, pixels) {
+  const session = sessions.get(file)
+  if (!session) return null
+  session.rgba = new Uint8ClampedArray(pixels)
+  const canvas = document.createElement('canvas')
+  canvas.width = session.workW
+  canvas.height = session.workH
+  const ctx = canvas.getContext('2d')
+  ctx.putImageData(new ImageData(session.rgba, session.workW, session.workH), 0, 0)
+  const blob = await new Promise((resolve) => canvas.toBlob((value) => resolve(value), 'image/webp', 0.92))
+  if (!blob) return null
+  const trimmed = await trimAndScaleTransparentImage(blob, 1024)
+  const baseName = (file.name || 'clothing').replace(/\.[^/.]+$/, '')
+  return new File([trimmed], `${baseName}_cutout.webp`, { type: 'image/webp' })
 }

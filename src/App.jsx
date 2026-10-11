@@ -719,6 +719,13 @@ function App() {
     }
   }
 
+  const handleBrushCommit = (file) => {
+    setCutoutFile(file)
+    setTempFile(file)
+    setSelectedImage(URL.createObjectURL(file))
+    setUseCutout(true)
+  }
+
   const handleCategoryCutout = (main) => {
     if (!originalFile) {
       setNewItem(prev => ({ ...prev, main_category: main, type: '' }))
@@ -878,7 +885,7 @@ function App() {
     let completed = 0;
     try {
       for (const item of bulkItems) {
-        const fileToUpload = (item.useCutout && item.cutoutFile) ? item.cutoutFile : (item.originalFile || item.file);
+        const fileToUpload = item.cutoutFile || item.originalFile || item.file;
         const safeName = fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
         const { error: uploadError } = await supabase.storage.from('clothes-images').upload(fileName, fileToUpload, { contentType: fileToUpload.type, upsert: false });
@@ -930,7 +937,7 @@ function App() {
     setLoading(true);
     let uploadedPath = null;
     try {
-      const fileToUpload = useCutout && cutoutFile ? cutoutFile : (originalFile || tempFile);
+      const fileToUpload = cutoutFile || originalFile || tempFile;
       const safeName = fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const fileName = uid + '/' + crypto.randomUUID() + '-' + safeName;
       uploadedPath = fileName;
@@ -1144,7 +1151,9 @@ function App() {
               handleAddItem={handleAddItem} 
               getIconForType={getIconForType}
               onCategoryCutout={handleCategoryCutout}
-              onBulkCategory={handleBulkCategory} 
+              onBulkCategory={handleBulkCategory}
+              originalFile={originalFile}
+              onBrushCommit={handleBrushCommit} 
             />
           )}
 
