@@ -40,6 +40,14 @@ export const getActivityIcon = (activity) => {
   return icons[activity] || <Tag size={22} />;
 };
 
+export const currentSeason = () => {
+  const month = new Date().getMonth();
+  if (month >= 5 && month <= 7) return 'Été';
+  if (month >= 8 && month <= 10) return 'Automne';
+  if (month === 11 || month <= 1) return 'Hiver';
+  return 'Printemps';
+};
+
 export const ALL_COLORS = ['Blanc', 'Noir', 'Gris', 'Beige', 'Marine', 'Bleu Ciel', 'Kaki', 'Vert Sapin', 'Bordeaux', 'Rouge', 'Rose Poudré', 'Rose', 'Moutarde', 'Jaune', 'Lilas', 'Violet', 'Terracotta', 'Orange', 'Or', 'Argent', 'Marron', 'Camel'];
 export const ALL_ACTIVITIES = ['Quotidien', 'Sport', 'Soirée', 'Travail'];
 export const ALL_SEASONS = ['Été', 'Hiver', 'Printemps', 'Automne'];
