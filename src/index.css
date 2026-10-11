@@ -7,43 +7,43 @@
   --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   --shadow-strong: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
   
-  /* Theme Female (Default) */
-  --bg: #fffcfd;
+  /* Theme Female & Boutique (Warm Linen / Rose poudré feutré) */
+  --bg: #faf7f2;
   --surface: #ffffff;
-  --primary: #be185d;
-  --primary-dark: #9f1239;
-  --primary-rgb: 190, 24, 93;
-  --secondary: #fdf2f8; /* Rose poudré */
-  --accent: #fbbf24; /* Doré */
-  --text-main: #1f2937;
-  --text-muted: #6b7280;
-  --border: #fecdd3;
+  --primary: #2d2623;
+  --primary-dark: #1b1715;
+  --primary-rgb: 45, 38, 35;
+  --secondary: #f3ede2;
+  --accent: #8b7355;
+  --text-main: #2b2523;
+  --text-muted: #827871;
+  --border: #ede6da;
 }
 
 [data-theme='male'] {
-  --bg: #f8fafc;
+  --bg: #f8f6f0;
   --surface: #ffffff;
-  --primary: #1d4ed8;
-  --primary-dark: #1e3a8a;
-  --primary-rgb: 29, 78, 216;
-  --secondary: #e0f2fe; /* Bleu Gris clair */
-  --accent: #3b82f6; /* Bleu vif */
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --border: #e2e8f0;
+  --primary: #2b2b2b;
+  --primary-dark: #1a1a1a;
+  --primary-rgb: 43, 43, 43;
+  --secondary: #ede9df;
+  --accent: #6b7a6e;
+  --text-main: #242220;
+  --text-muted: #797672;
+  --border: #e4dfd5;
 }
 
 [data-theme='neutral'] {
-  --bg: #f5f5f4; /* Stone 100 */
+  --bg: #f7f5f0;
   --surface: #ffffff;
-  --primary: #44403c;
-  --primary-dark: #292524;
-  --primary-rgb: 68, 64, 60;
-  --secondary: #e7e5e4; /* Stone 200 */
-  --accent: #a8a29e;
-  --text-main: #1c1917;
-  --text-muted: #57534e;
-  --border: #d6d3d1;
+  --primary: #383431;
+  --primary-dark: #23201e;
+  --primary-rgb: 56, 52, 49;
+  --secondary: #eae5dc;
+  --accent: #78736d;
+  --text-main: #252220;
+  --text-muted: #736e68;
+  --border: #e0dbd0;
 }
 
 * {

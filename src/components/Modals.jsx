@@ -60,20 +60,62 @@ export const EditModal = ({ show, onClose, isEditing, setIsEditing, editForm, se
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}><motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1 }} onClick={handleUpdateItem}>Sauvegarder ✨</motion.button><motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => setIsEditing(false)}>Annuler</motion.button></div>
             </div>
           ) : (
-            <div style={{ paddingBottom: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}><h2 className="title">Détails</h2><button type="button" className="icon-btn" onClick={onClose} aria-label="Fermer les détails"><X size={20} /></button></div>
-              <div style={{ width: '100%', aspectRatio: '1', borderRadius: '25px', overflow: 'hidden', background: 'white', marginBottom: '1.5rem', border: '1px solid rgba(0,0,0,0.05)' }}>
-                <img src={editForm.image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <div style={{ paddingBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+                <div>
+                  <h2 className="title" style={{ fontSize: '1.4rem', fontWeight: 800 }}>{editForm.type || 'Pièce'}</h2>
+                  <span className="subtitle" style={{ fontSize: '0.82rem', margin: 0 }}>{editForm.color || ''} {editForm.pattern && editForm.pattern !== 'Uni' ? `· ${editForm.pattern}` : ''}</span>
+                </div>
+                <button type="button" className="icon-btn" onClick={onClose} aria-label="Fermer les détails"><X size={20} /></button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '1.5rem' }}>
-                <div className="info-badge"><Tag size={14} /> {editForm.type}</div>
-                <div className="info-badge"><Palette size={14} /> {editForm.color}</div>
-                <div className="info-badge"><Sparkles size={14} /> {editForm.pattern || 'Uni'}</div>
-                <div className="info-badge"><Info size={14} /> {editForm.season}</div>
+
+              {/* Showcase de la pièce sur fond doux */}
+              <div style={{
+                width: '100%',
+                aspectRatio: '1',
+                borderRadius: '28px',
+                overflow: 'hidden',
+                background: 'radial-gradient(circle at center, #ffffff 45%, #f7f3eb 100%)',
+                marginBottom: '1.4rem',
+                border: '1px solid rgba(220, 210, 198, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '16px'
+              }}>
+                <img
+                  src={editForm.image_url}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 10px 20px rgba(45, 38, 35, 0.1))' }}
+                  alt={editForm.type}
+                />
               </div>
+
+              {/* Attributs épurés façon étiquette de boutique */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '1.6rem' }}>
+                {editForm.main_category && (
+                  <span style={{ padding: '6px 12px', borderRadius: '12px', background: 'rgba(237, 230, 218, 0.6)', color: 'var(--text-main)', fontSize: '0.78rem', fontWeight: 600 }}>
+                    {editForm.main_category}
+                  </span>
+                )}
+                {editForm.season && (
+                  <span style={{ padding: '6px 12px', borderRadius: '12px', background: 'rgba(237, 230, 218, 0.6)', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 500 }}>
+                    {Array.isArray(editForm.season) ? editForm.season.join(', ') : editForm.season}
+                  </span>
+                )}
+                {editForm.activity && (
+                  <span style={{ padding: '6px 12px', borderRadius: '12px', background: 'rgba(237, 230, 218, 0.6)', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 500 }}>
+                    {Array.isArray(editForm.activity) ? editForm.activity.join(', ') : editForm.activity}
+                  </span>
+                )}
+              </div>
+
               <div style={{ display: 'flex', gap: '10px' }}>
-                <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 1 }} onClick={() => setIsEditing(true)}>Modifier</motion.button>
-                <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ color: '#ef4444' }} onClick={handleDeleteItem} disabled={loading}><Trash2 size={20} /></motion.button>
+                <motion.button whileTap={{ scale: 0.98 }} className="btn-primary" style={{ flex: 1, padding: '1rem', fontSize: '0.95rem' }} onClick={() => setIsEditing(true)}>
+                  Modifier la pièce
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.98 }} className="btn-secondary" style={{ color: '#b91c1c', border: '1px solid rgba(185, 28, 28, 0.2)', width: '52px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={handleDeleteItem} disabled={loading} aria-label="Supprimer">
+                  <Trash2 size={18} />
+                </motion.button>
               </div>
             </div>
           )}

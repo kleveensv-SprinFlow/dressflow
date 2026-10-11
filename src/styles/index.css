@@ -6,36 +6,36 @@
   --radius-lg: 32px;
   --radius-md: 20px;
   
-  /* Theme Female (Default) — accent dark enough for white label text */
-  --primary: #be185d;
-  --secondary: #fecdd3;
-  --primary-glow: rgba(190, 24, 93, 0.28);
-  --primary-rgb: 190, 24, 93;
-  --bg-gradient: radial-gradient(circle at top left, #fff1f2, #fffcfd);
-  --text-main: #1f2937;
-  --text-muted: #6b7280;
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.5);
+  /* Theme Boutique Lin & Nude feutré */
+  --primary: #2d2623;
+  --secondary: #e8dfd2;
+  --primary-glow: rgba(45, 38, 35, 0.12);
+  --primary-rgb: 45, 38, 35;
+  --bg-gradient: radial-gradient(circle at top left, #fdfbf7, #f7f3eb);
+  --text-main: #2b2523;
+  --text-muted: #827871;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(220, 210, 198, 0.45);
 }
 
 [data-theme='male'] {
-  --primary: #1d4ed8;
-  --secondary: #bfdbfe;
-  --primary-glow: rgba(29, 78, 216, 0.28);
-  --primary-rgb: 29, 78, 216;
-  --bg-gradient: radial-gradient(circle at top left, #eff6ff, #f8fafc);
-  --text-main: #0f172a;
-  --text-muted: #475569;
+  --primary: #242220;
+  --secondary: #e2dbce;
+  --primary-glow: rgba(36, 34, 32, 0.12);
+  --primary-rgb: 36, 34, 32;
+  --bg-gradient: radial-gradient(circle at top left, #faf8f3, #f3efe6);
+  --text-main: #242220;
+  --text-muted: #797672;
 }
 
 [data-theme='neutral'] {
-  --primary: #44403c;
-  --secondary: #d6d3d1;
-  --primary-glow: rgba(68, 64, 60, 0.28);
-  --primary-rgb: 68, 64, 60;
-  --bg-gradient: radial-gradient(circle at top left, #f5f5f4, #fafaf9);
-  --text-main: #1c1917;
-  --text-muted: #57534e;
+  --primary: #383431;
+  --secondary: #ded7cb;
+  --primary-glow: rgba(56, 52, 49, 0.12);
+  --primary-rgb: 56, 52, 49;
+  --bg-gradient: radial-gradient(circle at top left, #faf8f5, #f4efe7);
+  --text-main: #252220;
+  --text-muted: #736e68;
 }
 
 * {
@@ -606,8 +606,8 @@ body {
 .item-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-  padding: 0.5rem;
+  gap: 1.1rem;
+  padding: 0.6rem 0;
   flex: 1;
 }
 
@@ -618,49 +618,56 @@ body {
   color: var(--text-main);
   font: inherit;
   padding: 0;
-  border: none;
-  background: var(--glass-bg);
-  border-radius: var(--radius-md);
+  border: 1px solid rgba(220, 212, 200, 0.45);
+  background: #ffffff;
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  box-shadow: 0 4px 20px rgba(50, 40, 35, 0.04);
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .item-card:active {
-  transform: scale(0.97);
+  transform: scale(0.975);
 }
 
 .item-image {
   width: 100%;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 1 / 1.05;
   overflow: hidden;
-  background: rgba(255,255,255,0.4);
+  background: radial-gradient(circle at center, #ffffff 40%, #f7f4ee 100%);
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
+  padding: 10px;
 }
 
 .item-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 12px rgba(45, 38, 35, 0.08));
+  transition: transform 0.3s ease;
 }
 
 .item-info {
-  padding: 1rem;
+  padding: 0.75rem 0.9rem 0.9rem;
+  background: #ffffff;
 }
 
 .item-type {
-  font-weight: 800;
-  font-size: 1rem;
-  margin-bottom: 0.2rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: -0.2px;
+  color: var(--text-main);
+  margin-bottom: 2px;
 }
 
 .item-meta {
-  font-size: 0.8rem;
+  font-size: 0.74rem;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -731,12 +738,11 @@ body {
   border: 4px solid white;
 }
 
-/* --- Step 9: Filters & Travel --- */
 .filter-bar {
   display: flex;
-  gap: 0.8rem;
+  gap: 0.55rem;
   overflow-x: auto;
-  padding: 0.5rem 0;
+  padding: 0.5rem 0 0.8rem;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -744,23 +750,24 @@ body {
 
 .filter-pill {
   white-space: nowrap;
-  padding: 0.7rem 1.4rem;
-  border-radius: 20px;
-  background: white;
-  border: 1px solid var(--glass-border);
-  font-size: 0.85rem;
-  font-weight: 700;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(220, 212, 200, 0.6);
   color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  box-shadow: 0 2px 8px rgba(45, 38, 35, 0.03);
+  transition: all 0.2s ease;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .filter-pill.active {
   background: var(--primary);
-  color: white;
+  color: #ffffff;
   border-color: var(--primary);
-  box-shadow: 0 8px 20px var(--primary-glow);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(45, 38, 35, 0.15);
 }
 
 .weather-badge {

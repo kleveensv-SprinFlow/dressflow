@@ -59,33 +59,33 @@ const AddClothingView = ({
           <p className="subtitle" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Seul le vêtement reste, sur un fond transparent</p>
         </header>
 
-        {/* CONSEIL PHOTO FAÇON WHERING */}
+        {/* CONSEIL PHOTO FAÇON BOUTIQUE */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.85)',
+          background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(var(--primary-rgb), 0.15)',
+          border: '1px solid rgba(220, 212, 200, 0.5)',
           borderRadius: '20px',
           padding: '1rem 1.1rem',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.03)'
+          boxShadow: '0 4px 15px rgba(45, 38, 35, 0.03)'
         }}>
           <div style={{
-            width: '42px',
-            height: '42px',
+            width: '40px',
+            height: '40px',
             borderRadius: '14px',
-            background: 'rgba(var(--primary-rgb), 0.1)',
+            background: 'rgba(45, 38, 35, 0.06)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '1.3rem',
+            fontSize: '1.2rem',
             flexShrink: 0
           }}>
-            💡
+            ✨
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.45 }}>
-            <strong>Conseil photo :</strong> Le fond, le visage et la peau sont retirés. Les pixels du tissu d’origine sont conservés.
+            <strong>Conseil dressing :</strong> Pose ton vêtement à plat ou porte-le. Seule la pièce sera conservée pour rejoindre ta penderie.
           </div>
         </div>
 
@@ -260,13 +260,9 @@ const AddClothingView = ({
                 padding: '12px',
                 filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.12))'
               }}
-              alt="Vêtement sans fond"
+              alt="Vêtement"
             />
           )}
-
-          <div className="ai-badge" style={{ background: 'white', color: 'var(--text-main)', border: '1px solid rgba(0,0,0,0.08)' }}>
-            SANS FOND
-          </div>
         </div>
 
         {!isProcessingCutout && originalFile && (

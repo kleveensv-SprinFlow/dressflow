@@ -22,7 +22,7 @@ const DashboardView = ({
   onWeatherClick,
   onImageError
 }) => {
-  const filters = ['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'];
+  const filters = ['Tous', 'Tête', 'Hauts', 'Bas', 'Chaussures', 'Accessoires', 'Robe'];
   const outfits = groupWornOutfits(items, { limit: 4 });
   const latestOutfit = outfits[0];
   const olderOutfits = outfits.slice(1);

@@ -117,17 +117,17 @@ function App() {
     let result = [...items];
     if (activeFilter !== 'Tous') {
       result = result.filter(item => {
-        if (activeFilter === 'Mes Hauts') return item.main_category === 'Haut'
-        if (activeFilter === 'Mes Bas') return item.main_category === 'Bas'
+        if (activeFilter === 'Tête') return item.main_category === 'Chapeau'
+        if (activeFilter === 'Hauts') return item.main_category === 'Haut'
+        if (activeFilter === 'Bas') return item.main_category === 'Bas'
+        if (activeFilter === 'Chaussures') return item.main_category === 'Chaussures'
+        if (activeFilter === 'Accessoires') return item.main_category === 'Accessoires'
         if (activeFilter === 'Extérieur') return item.type === 'Veste' || item.type === 'Manteau'
         if (activeFilter === 'Robe') return item.type === 'Robe' || item.type === 'Jupe'
-        const activities = String(item.activity || '').split(/[,;|]/).map(value => value.trim());
-        if (activeFilter === 'Sport') return activities.includes('Sport');
-        if (activeFilter === 'Soirée') return activities.includes('Soirée');
         return true
       })
     }
-    const order = ["Haut", "Bas", "Chaussures", "Chapeau", "Accessoires"]
+    const order = ["Chapeau", "Haut", "Bas", "Chaussures", "Accessoires"]
     return result.sort((a, b) => order.indexOf(a.main_category) - order.indexOf(b.main_category))
   }, [items, activeFilter])
 
