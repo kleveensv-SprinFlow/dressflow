@@ -57,7 +57,14 @@ function App() {
   const avatarPathRef = useRef(null)
   const imageRetryRef = useRef(new Set())
   
-  const [weather, setWeather] = useState(null)
+  const [weather, setWeather] = useState(() => {
+    try {
+      const saved = localStorage.getItem('dressflow_weather');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  })
   const [weatherLoading, setWeatherLoading] = useState(false)
   
   const [citySearch, setCitySearch] = useState('')
@@ -176,14 +183,24 @@ function App() {
     }
   };
 
-  const initWeather = async (lat = null, lon = null, cityName = null) => {
+  const initWeather = async (lat = null, lon = null, cityName = null, isManual = false) => {
     setWeatherLoading(true)
     try {
       const data = await getLocalWeather(lat, lon);
       if (cityName) data.city = cityName;
       setWeather(data);
+      try {
+        localStorage.setItem('dressflow_weather', JSON.stringify(data));
+      } catch {}
+      if (isManual) {
+        toast.success(`Météo mise à jour pour ${data.city} !`);
+      }
     } catch (err) {
-      toast.error(err.message || "Position introuvable.");
+      if (isManual) {
+        toast.error(err.message || "Position introuvable.");
+      } else {
+        console.warn("Silent weather init error:", err?.message || err);
+      }
     } finally {
       setWeatherLoading(false);
     }
@@ -353,7 +370,7 @@ function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  useEffect(() => { if (['dashboard', 'stylist', 'trip', 'settings'].includes(view)) { if (!weather && !weatherLoading) initWeather(); } }, [view, items])
+  useEffect(() => { if (['dashboard', 'stylist', 'trip', 'settings'].includes(view)) { if (!weather && !weatherLoading) initWeather(null, null, null, false); } }, [view, items])
 
   const handleLogout = async () => {
     setLoading(true); try {
@@ -492,10 +509,81 @@ function App() {
   }
 
   const handleSelectCity = (city) => {
-    if (cityModalMode === 'home') initWeather(city.latitude, city.longitude, city.name);
+    if (cityModalMode === 'home') initWeather(city.latitude, city.longitude, city.name, true);
     else updateTravelData({ ...travelData, destination: city.name, lat: city.latitude, lon: city.longitude });
     setShowCityModal(false); setCitySearch(''); setCityResults([])
   }
+
+  const handleAddDemoItems = async () => {
+    if (!uid) {
+      toast.error("Connecte-toi avant d'ajouter des vêtements.");
+      return;
+    }
+    setLoading(true);
+    const demoPieces = [
+      {
+        profile_id: uid,
+        main_category: 'Mes Hauts',
+        type: 'T-shirt',
+        color: 'Blanc',
+        season: 'Printemps, Été, Automne',
+        activity: 'Quotidien',
+        icon: '👕',
+        image_url: null
+      },
+      {
+        profile_id: uid,
+        main_category: 'Mes Bas',
+        type: 'Jean',
+        color: 'Bleu',
+        season: 'Printemps, Automne, Hiver',
+        activity: 'Quotidien',
+        icon: '👖',
+        image_url: null
+      },
+      {
+        profile_id: uid,
+        main_category: 'Extérieur',
+        type: 'Veste',
+        color: 'Noir',
+        season: 'Printemps, Automne',
+        activity: 'Sortie',
+        icon: '🧥',
+        image_url: null
+      },
+      {
+        profile_id: uid,
+        main_category: 'Chaussures',
+        type: 'Baskets',
+        color: 'Blanc',
+        season: 'Toutes saisons',
+        activity: 'Sport',
+        icon: '👟',
+        image_url: null
+      },
+      {
+        profile_id: uid,
+        main_category: 'Mes Hauts',
+        type: 'Pull',
+        color: 'Gris',
+        season: 'Automne, Hiver',
+        activity: 'Travail',
+        icon: '🧶',
+        image_url: null
+      }
+    ];
+
+    try {
+      const { error } = await supabase.from('clothes').insert(demoPieces);
+      if (error) throw error;
+      await fetchItems(uid);
+      toast.success("Dressing démo ajouté ! Découvre tes premières tenues ✨");
+    } catch (err) {
+      toast.error(err.message || "Impossible de charger les pièces démo.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDeleteItem = async () => {
     if (!selectedItem) return;
@@ -802,7 +890,26 @@ function App() {
 
   return (
     <div id="root">
-      <Toaster />
+      <Toaster 
+        position="top-center" 
+        containerStyle={{
+          top: 'max(env(safe-area-inset-top, 16px), 24px)'
+        }}
+        toastOptions={{
+          duration: 3500,
+          style: {
+            background: 'rgba(255, 255, 255, 0.95)',
+            color: '#1f2937',
+            backdropFilter: 'blur(12px)',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.06)',
+            borderRadius: '16px',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            border: '1px solid rgba(0,0,0,0.06)',
+            padding: '12px 16px',
+          }
+        }}
+      />
       <div className="bg-blobs"><div className="blob blob-1"></div><div className="blob blob-2"></div></div>
       <div className="app-container">
         <AnimatePresence mode="wait">
@@ -861,7 +968,24 @@ function App() {
             </motion.div>
           )}
 
-          {view === 'dashboard' && <DashboardView key="dashboard" items={items} loading={loading} activeFilter={activeFilter} setActiveFilter={setActiveFilter} filteredItems={filteredItems} onSelectItem={(item) => { setSelectedItem(item); setEditForm({ ...item }); setIsEditing(false); }} onAddClick={() => setView('add-choice')} weather={weather} weatherLoading={weatherLoading} onWeatherClick={() => { setCityModalMode('home'); setShowCityModal(true); }} onImageError={handleImageError} />}
+          {view === 'dashboard' && (
+            <DashboardView 
+              key="dashboard" 
+              name={name}
+              items={items} 
+              loading={loading} 
+              activeFilter={activeFilter} 
+              setActiveFilter={setActiveFilter} 
+              filteredItems={filteredItems} 
+              onSelectItem={(item) => { setSelectedItem(item); setEditForm({ ...item }); setIsEditing(false); }} 
+              onAddClick={() => setView('add-choice')} 
+              onAddDemoItems={handleAddDemoItems}
+              weather={weather} 
+              weatherLoading={weatherLoading} 
+              onWeatherClick={() => { setCityModalMode('home'); setShowCityModal(true); }} 
+              onImageError={handleImageError} 
+            />
+          )}
           {view === 'stylist' && <StylistView key="stylist" stylistMode={stylistMode} setStylistMode={setStylistMode} currentOutfit={currentOutfit} outfitLoading={outfitLoading} handleGenerateOutfitRequest={handleGenerateOutfitRequest} handleValidateOutfit={handleValidateOutfit} manualItems={manualItems} manualOutfit={manualOutfit} setManualOutfit={setManualOutfit} loading={loading} lockedOutfit={lockedOutfit} setLockedOutfit={setLockedOutfit} onImageError={handleImageError} />}
           {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={updateTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} onTogglePacked={toggleSuitcaseItem} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
           {view === 'settings' && <SettingsView key="settings" profile={{id: uid, name, email, avatar_url: avatarUrl}} name={name} setName={setName} email={email} setEmail={setEmail} avatarPreview={avatarPreview} avatarInputRef={avatarInputRef} setTempAvatarFile={setTempAvatarFile} setAvatarPreview={setAvatarPreview} handleUpdateProfile={handleUpdateProfile} handleLogout={handleLogout} setShowDeleteModal={setShowDeleteModal} subscriptionTier={subscriptionTier} items={items} aiGensRemaining={aiGensRemaining} />}

@@ -46,7 +46,7 @@ export const searchCity = async (query) => {
   }
 }
 
-const getWeatherDescription = (code) => {
+export const getWeatherDescription = (code) => {
   const codes = {
     0: 'Ciel dégagé',
     1: 'Principalement dégagé',
@@ -62,4 +62,14 @@ const getWeatherDescription = (code) => {
     95: 'Orage'
   }
   return codes[code] || 'Météo variable'
+}
+
+export const getWeatherTip = (temp, code) => {
+  if (temp == null) return null;
+  if ([51, 61, 63, 80, 95].includes(code)) return "Pluie prévue : prévois un imperméable ou un parapluie ☔";
+  if (code === 71) return "Neige : prévois un manteau chaud et de bonnes chaussures ❄️";
+  if (temp < 10) return "Temps frais : superpose les couches ou sors un bon manteau 🧥";
+  if (temp < 18) return "Température douce : une veste mi-saison ou un pull léger est parfait 🌤️";
+  if (temp < 24) return "Temps agréable : tenue légère, t-shirt ou chemise idéale 😎";
+  return "Chaleur estivale : matières légères et respirantes recommandées ☀️";
 }
