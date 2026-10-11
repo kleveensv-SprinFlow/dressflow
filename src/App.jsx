@@ -101,6 +101,7 @@ function App() {
   const searchTimeoutRef = useRef(null)
   const fileInputRef = useRef(null)
   const galleryInputRef = useRef(null)
+  const cutoutSeq = useRef(0)
 
   const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', pattern: 'Uni', season: [currentSeason()], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
@@ -685,6 +686,91 @@ function App() {
     }
   };
 
+  const publishCutout = async (file, mainCategory) => {
+    const seq = ++cutoutSeq.current
+    setIsProcessingCutout(true)
+    try {
+      const { file: processed, removed, main_category, type, pattern } = await removeBackground(file, mainCategory)
+      if (seq !== cutoutSeq.current) return false
+      if (!removed) {
+        if (mainCategory) toast.error("Cette pièce n’est pas visible sur la photo.")
+        return false
+      }
+      setCutoutFile(processed)
+      setTempFile(processed)
+      setSelectedImage(URL.createObjectURL(processed))
+      setUseCutout(true)
+      const detected = await detectDominantColor(processed)
+      if (seq !== cutoutSeq.current) return false
+      setNewItem(prev => ({
+        ...prev,
+        main_category: main_category || mainCategory || prev.main_category,
+        type: type || prev.type,
+        icon: type ? getIconForType(type) : prev.icon,
+        color: detected?.color || prev.color,
+        pattern: pattern || detected?.pattern || prev.pattern
+      }))
+      return true
+    } catch (error) {
+      console.warn("Détourage silencieux échoué:", error)
+      return false
+    } finally {
+      if (seq === cutoutSeq.current) setIsProcessingCutout(false)
+    }
+  }
+
+  const handleCategoryCutout = (main) => {
+    if (!originalFile) {
+      setNewItem(prev => ({ ...prev, main_category: main, type: '' }))
+      return
+    }
+    publishCutout(originalFile, main)
+  }
+
+  const handleBulkCategory = async (index, main) => {
+    const source = bulkItems[index]?.originalFile || bulkItems[index]?.file
+    const fallbackType = CATEGORY_HIERARCHY[main]?.[0] || ''
+    setBulkItems(prev => {
+      const next = [...prev]
+      if (!next[index]) return prev
+      next[index] = {
+        ...next[index],
+        main_category: main,
+        type: fallbackType,
+        icon: getIconForType(fallbackType)
+      }
+      return next
+    })
+    if (!source) return
+    try {
+      const { file: cutF, removed, type, pattern } = await removeBackground(source, main)
+      if (!removed) {
+        toast.error("Cette pièce n’est pas visible sur la photo.")
+        return
+      }
+      const detected = await detectDominantColor(cutF)
+      const nextType = type || fallbackType
+      setBulkItems(prev => {
+        const next = [...prev]
+        if (!next[index] || next[index].main_category !== main) return prev
+        next[index] = {
+          ...next[index],
+          file: cutF,
+          cutoutFile: cutF,
+          useCutout: true,
+          cutoutPreview: URL.createObjectURL(cutF),
+          type: nextType,
+          icon: getIconForType(nextType),
+          color: detected?.color || next[index].color,
+          pattern: pattern || detected?.pattern || next[index].pattern
+        }
+        return next
+      })
+    } catch (error) {
+      console.warn("Recoupe impossible:", error)
+    }
+  }
+
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
@@ -714,42 +800,8 @@ function App() {
         setOriginalImage(origUrl);
         setSelectedImage(origUrl);
         setUseCutout(false);
-        setIsProcessingCutout(true);
         setView('add-detail');
-
-        // Lancement asynchrone du détourage pour ne pas bloquer l'affichage
-        (async () => {
-          try {
-            const { file: processed, removed, main_category, type, pattern } = await removeBackground(file);
-            if (removed) {
-              setCutoutFile(processed);
-              setTempFile(processed);
-              const cutUrl = URL.createObjectURL(processed);
-              setSelectedImage(cutUrl);
-              setUseCutout(true);
-              const detected = await detectDominantColor(processed);
-              setNewItem(prev => ({
-                ...prev,
-                main_category: main_category || prev.main_category,
-                type: type || prev.type,
-                icon: type ? getIconForType(type) : prev.icon,
-                color: detected?.color || prev.color,
-                pattern: pattern || detected?.pattern || prev.pattern
-              }));
-            } else {
-              const detected = await detectDominantColor(file);
-              setNewItem(prev => ({
-                ...prev,
-                color: detected?.color || prev.color,
-                pattern: detected?.pattern || prev.pattern
-              }));
-            }
-          } catch (e) {
-            console.warn("Détourage silencieux échoué:", e);
-          } finally {
-            setIsProcessingCutout(false);
-          }
-        })();
+        publishCutout(file);
       } else {
         // Ajout groupé : initialisation immédiate
         const initialBulk = acceptedFiles.map(file => ({
@@ -1090,7 +1142,9 @@ function App() {
               newItem={newItem} 
               setNewItem={setNewItem} 
               handleAddItem={handleAddItem} 
-              getIconForType={getIconForType} 
+              getIconForType={getIconForType}
+              onCategoryCutout={handleCategoryCutout}
+              onBulkCategory={handleBulkCategory} 
             />
           )}
 

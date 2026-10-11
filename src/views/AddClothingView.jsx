@@ -23,7 +23,9 @@ const AddClothingView = ({
   newItem,
   setNewItem,
   handleAddItem,
-  getIconForType
+  getIconForType,
+  onCategoryCutout,
+  onBulkCategory
 }) => {
   if (view === 'add-choice') {
     return (
@@ -163,9 +165,12 @@ const AddClothingView = ({
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                       {MAIN_CATEGORIES.map(c => (
                         <button key={c} onClick={() => {
-                          const newBulk = [...bulkItems];
-                          newBulk[idx] = { ...newBulk[idx], main_category: c, type: CATEGORY_HIERARCHY[c][0], icon: getIconForType(CATEGORY_HIERARCHY[c][0]) };
-                          setBulkItems(newBulk);
+                          if (onBulkCategory) onBulkCategory(idx, c)
+                          else {
+                            const newBulk = [...bulkItems];
+                            newBulk[idx] = { ...newBulk[idx], main_category: c, type: CATEGORY_HIERARCHY[c][0], icon: getIconForType(CATEGORY_HIERARCHY[c][0]) };
+                            setBulkItems(newBulk);
+                          }
                         }} className={`filter-pill ${item.main_category === c ? 'active' : ''}`} style={{ fontSize: '0.6rem', padding: '3px 8px' }}>{c}</button>
                       ))}
                     </div>
@@ -326,8 +331,11 @@ const AddClothingView = ({
             <ChoiceSelector
               options={MAIN_CATEGORIES}
               selected={newItem.main_category}
-              onSelect={(val) => setNewItem({ ...newItem, main_category: val, type: '' })}
+              onSelect={(val) => onCategoryCutout ? onCategoryCutout(val) : setNewItem({ ...newItem, main_category: val, type: '' })}
             />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+              Haut garde le t-shirt ou la veste. Bas garde le pantalon. Chaussures, seulement les chaussures.
+            </p>
           </section>
 
           {/* 2. TYPE */}

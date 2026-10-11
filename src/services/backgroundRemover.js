@@ -7,7 +7,7 @@
  * la photo d’origine est gardée : l’ajout n’est jamais bloqué.
  */
 import { drawModelInput, segmentSquare } from './cutout/segment-client.js'
-import { buildCutout } from './cutout/refine.js'
+import { buildCutout, dominantGroup } from './cutout/refine.js'
 import { detectMotif, motifName } from './cutout/facts.js'
 
 const WORK_MAX = 960
@@ -23,11 +23,32 @@ const LABEL_PIECE = {
   Bag: { main_category: 'Accessoires', type: 'Sac' }
 }
 
-function suggestPiece(labels, classIds) {
+const GROUP_OF = {
+  haut: ['Upper-clothes', 'Dress'],
+  bas: ['Pants', 'Skirt'],
+  chaussures: ['Left-shoe', 'Right-shoe'],
+  chapeau: ['Hat'],
+  accessoires: ['Bag', 'Scarf']
+}
+
+const sessions = new WeakMap()
+
+export function groupFromCategory(main) {
+  if (main === 'Haut') return 'haut'
+  if (main === 'Bas') return 'bas'
+  if (main === 'Chaussures') return 'chaussures'
+  if (main === 'Chapeau') return 'chapeau'
+  if (main === 'Accessoires') return 'accessoires'
+  return null
+}
+
+function suggestPiece(labels, classIds, group) {
+  const allow = GROUP_OF[group] ? new Set(GROUP_OF[group]) : null
   const counts = new Map()
   for (let i = 0; i < classIds.length; i++) {
     const label = labels[classIds[i]]
     if (!LABEL_PIECE[label]) continue
+    if (allow && !allow.has(label)) continue
     counts.set(label, (counts.get(label) || 0) + 1)
   }
   let bestLabel = null
@@ -57,7 +78,9 @@ function fileToImage(file) {
   })
 }
 
-async function cutoutLocally(file) {
+async function ensureSession(file) {
+  const cached = sessions.get(file)
+  if (cached) return cached
   const img = await fileToImage(file)
   const width = img.naturalWidth || img.width
   const height = img.naturalHeight || img.height
@@ -72,29 +95,53 @@ async function cutoutLocally(file) {
   const photo = ctx.getImageData(0, 0, workW, workH)
   const model = drawModelInput(img, width, height)
   const seg = await segmentSquare(model.image, model.crop, () => {})
-  const cut = buildCutout({
-    labels: seg.labels,
-    classIds: seg.classIds,
-    maskW: seg.width,
-    maskH: seg.height,
+  const session = {
     photo: photo.data,
     workW,
     workH,
-    group: 'tout',
-    contract: 1,
-    softness: 2
+    labels: seg.labels,
+    classIds: seg.classIds,
+    maskW: seg.width,
+    maskH: seg.height
+  }
+  sessions.set(file, session)
+  return session
+}
+
+async function renderSession(session, group) {
+  const cut = buildCutout({
+    labels: session.labels,
+    classIds: session.classIds,
+    maskW: session.maskW,
+    maskH: session.maskH,
+    photo: session.photo,
+    workW: session.workW,
+    workH: session.workH,
+    group,
+    contract: 2,
+    softness: 0
   })
-  if (cut.coverage < 0.012) throw new Error('Aucun vêtement détecté')
-  ctx.putImageData(new ImageData(cut.rgba, workW, workH), 0, 0)
+  if (cut.coverage < 0.008) throw new Error('Aucun vêtement de cette catégorie')
+  const canvas = document.createElement('canvas')
+  canvas.width = session.workW
+  canvas.height = session.workH
+  const ctx = canvas.getContext('2d')
+  ctx.putImageData(new ImageData(cut.rgba, session.workW, session.workH), 0, 0)
   const blob = await new Promise((resolve) => canvas.toBlob((value) => resolve(value), 'image/webp', 0.92))
   if (!blob) throw new Error('Export impossible')
-  const piece = suggestPiece(seg.labels, seg.classIds)
+  const piece = suggestPiece(session.labels, session.classIds, group)
   return {
     blob,
     main_category: piece.main_category,
     type: piece.type,
-    pattern: motifName(detectMotif(cut.rgba, workW, workH))
+    pattern: motifName(detectMotif(cut.rgba, session.workW, session.workH))
   }
+}
+
+async function cutoutLocally(file, mainCategory) {
+  const session = await ensureSession(file)
+  const group = groupFromCategory(mainCategory) || dominantGroup(session.labels, session.classIds)
+  return renderSession(session, group === 'tout' ? 'haut' : group)
 }
 
 /**
@@ -186,9 +233,9 @@ export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 102
  * Garde uniquement le tissu, sur un fond transparent.
  * Le visage, la peau et le décor sont retirés. Les pixels du vêtement ne sont pas redessinés.
  */
-export const removeBackground = async (file) => {
+export const removeBackground = async (file, mainCategory) => {
   try {
-    const local = await cutoutLocally(file)
+    const local = await cutoutLocally(file, mainCategory)
     const trimmedBlob = await trimAndScaleTransparentImage(local.blob, 1024)
     const baseName = (file.name || 'clothing').replace(/\.[^/.]+$/, '')
     const processedFile = new File([trimmedBlob], `${baseName}_cutout.webp`, { type: 'image/webp' })

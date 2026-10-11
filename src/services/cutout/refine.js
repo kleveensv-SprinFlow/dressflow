@@ -2,13 +2,17 @@ const GROUP_LABELS = {
   haut: ["Upper-clothes", "Dress"],
   bas: ["Pants", "Skirt"],
   chaussures: ["Left-shoe", "Right-shoe"],
+  chapeau: ["Hat"],
+  accessoires: ["Bag", "Scarf"],
   tout: ["Upper-clothes", "Dress", "Pants", "Skirt", "Left-shoe", "Right-shoe"]
 };
 const ATTACH_LABELS = {
-  haut: ["Hat", "Scarf", "Belt"],
-  bas: ["Belt"],
+  haut: [],
+  bas: [],
   chaussures: [],
-  tout: ["Hat", "Scarf", "Belt"]
+  chapeau: [],
+  accessoires: [],
+  tout: []
 };
 const ZONE_FR = {
   Background: "Fond",
@@ -420,13 +424,13 @@ function paintAlpha(photo, alpha, classIds, labels, w, h) {
       let g = photo[o + 1];
       let b = photo[o + 2];
       const a = alpha[i];
-      if (a > 0 && a < 248) {
+      if (a > 20 && a < 230) {
         const t = Math.floor(y / tile) * tw + Math.floor(x / tile);
         const br = known[t] ? colR[t] : fallbackR;
         const bg = known[t] ? colG[t] : fallbackG;
         const bb = known[t] ? colB[t] : fallbackB;
         const dist = Math.hypot(r - br, g - bg, b - bb);
-        if (dist < 78) {
+        if (dist < 36) {
           const a01 = Math.max(a / 255, 0.18);
           r = clampByte((r - br * (1 - a / 255)) / a01);
           g = clampByte((g - bg * (1 - a / 255)) / a01);
@@ -450,14 +454,15 @@ function alphaFromBinary(bin, guide, w, h, softness) {
   const n = w * h;
   const src = new Float32Array(n);
   for (let i = 0; i < n; i++) src[i] = bin[i] ? 1 : 0;
-  const radius = Math.max(4, Math.round(Math.min(w, h) * 0.012));
-  let q = guidedFilter(guide, src, w, h, radius, 16e-4);
+  const radius = 2;
+  let q = guidedFilter(guide, src, w, h, radius, 8e-4);
   if (softness > 0) q = boxMean(q, w, h, softness);
   const alpha = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
-    const x = Math.min(1, Math.max(0, (q[i] - 0.04) / 0.9));
-    const s = x * x * (3 - 2 * x);
-    alpha[i] = Math.round(s * 255);
+    const v = q[i];
+    if (v >= 0.58) alpha[i] = 255;
+    else if (v <= 0.42) alpha[i] = 0;
+    else alpha[i] = Math.round((v - 0.42) / 0.16 * 255);
   }
   return alpha;
 }
