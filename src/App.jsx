@@ -1114,6 +1114,7 @@ function App() {
               selectedActivity={selectedActivity}
               setSelectedActivity={setSelectedActivity}
               currentOutfit={currentOutfit} 
+              setCurrentOutfit={setCurrentOutfit}
               outfitLoading={outfitLoading} 
               handleGenerateOutfitRequest={handleGenerateOutfitRequest} 
               handleValidateOutfit={handleValidateOutfit} 
