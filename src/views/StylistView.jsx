@@ -23,7 +23,8 @@ const StylistView = ({
   setManualOutfit,
   loading,
   lockedOutfit,
-  setLockedOutfit
+  setLockedOutfit,
+  onImageError
 }) => {
   const visibleParts = currentOutfit
     ? OUTFIT_PARTS.filter(({ key }) => currentOutfit[key])
@@ -102,7 +103,7 @@ const StylistView = ({
                     <div key={key} className="glass-card" style={{ padding: '10px', position: 'relative', minWidth: 0 }}>
                       <div style={{ aspectRatio: '1', borderRadius: '15px', overflow: 'hidden', background: 'white', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {item.image_url
-                          ? <img src={item.image_url} alt={item.type || label} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                          ? <img src={item.image_url} alt={item.type || label} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={() => onImageError?.(item)} />
                           : <span style={{ fontSize: '3rem' }}>{item.icon || '👕'}</span>}
                       </div>
                       <div style={{ fontSize: '0.62rem', opacity: 0.6, textAlign: 'center', marginBottom: '3px' }}>{label}</div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { MapPin, ChevronRight, Sun, Loader2, Plus } from 'lucide-react';
+import { groupWornOutfits, formatWornAt } from '../utils/wornHistory';
 
 const DashboardView = ({
   items,
@@ -12,9 +13,13 @@ const DashboardView = ({
   onAddClick,
   weather,
   weatherLoading,
-  onWeatherClick
+  onWeatherClick,
+  onImageError
 }) => {
   const filters = ['Tous', 'Mes Hauts', 'Mes Bas', 'Extérieur', 'Robe', 'Sport', 'Soirée'];
+  const outfits = groupWornOutfits(items, { limit: 4 });
+  const latestOutfit = outfits[0];
+  const olderOutfits = outfits.slice(1);
 
   return (
     <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="dashboard-container">
@@ -44,6 +49,41 @@ const DashboardView = ({
           </div>
         )}
       </button>
+
+      {latestOutfit && (
+        <section aria-label="Tenues portées" style={{ marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.65rem' }}>
+            <h2 className="title" style={{ fontSize: '1.05rem', margin: 0 }}>Dernière tenue</h2>
+            <span className="subtitle" style={{ margin: 0 }}>{formatWornAt(latestOutfit.at)}</span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.55rem', overflowX: 'auto', paddingBottom: '0.2rem' }}>
+            {latestOutfit.items.map(item => (
+              <button key={item.id} type="button" onClick={() => onSelectItem(item)} aria-label={`${item.type}, porté le ${formatWornAt(latestOutfit.at)}`} style={{ flex: '0 0 84px', width: '84px', border: 'none', background: 'white', borderRadius: '16px', padding: '6px', textAlign: 'center', cursor: 'pointer' }}>
+                <div style={{ height: '72px', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+                  {item.image_url
+                    ? <img src={item.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={() => onImageError?.(item)} />
+                    : <span style={{ fontSize: '1.6rem' }}>{item.icon || '👕'}</span>}
+                </div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.type}</div>
+              </button>
+            ))}
+          </div>
+          {olderOutfits.map(outfit => (
+            <div key={outfit.key} style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', marginTop: '0.7rem' }}>
+              <span className="subtitle" style={{ margin: 0, width: '4.2rem', flex: '0 0 auto', fontSize: '0.75rem' }}>{formatWornAt(outfit.at)}</span>
+              <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto' }}>
+                {outfit.items.map(item => (
+                  <button key={item.id} type="button" onClick={() => onSelectItem(item)} aria-label={`${item.type}, porté le ${formatWornAt(outfit.at)}`} style={{ width: '36px', height: '36px', borderRadius: '10px', border: '1px solid rgba(0,0,0,0.06)', background: 'white', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {item.image_url
+                      ? <img src={item.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={() => onImageError?.(item)} />
+                      : <span style={{ fontSize: '1rem' }}>{item.icon || '👕'}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <div className="filter-bar" role="group" aria-label="Filtrer le dressing">
         {filters.map(filter => (
@@ -86,7 +126,7 @@ const DashboardView = ({
                 >
                   <div className="item-image">
                     {item.image_url
-                      ? <img src={item.image_url} alt={item.type || 'Vêtement'} loading="lazy" />
+                      ? <img src={item.image_url} alt={item.type || 'Vêtement'} loading="lazy" onError={() => onImageError?.(item)} />
                       : <div style={{ fontSize: '3rem' }}>{item.icon}</div>}
                   </div>
                   <div className="item-info">

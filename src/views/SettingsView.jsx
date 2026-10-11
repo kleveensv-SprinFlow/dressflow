@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { UserCircle, ShieldCheck, Mail, Save, LogOut, Trash2, Camera, UploadCloud, LifeBuoy, FileText, Info } from 'lucide-react';
+import { UserCircle, Mail, Save, LogOut, Camera } from 'lucide-react';
 
 const SettingsView = ({
   profile,
@@ -23,7 +23,7 @@ const SettingsView = ({
     <div className="dashboard-container" style={{ paddingBottom: '120px' }}>
       <header style={{ marginBottom: '2rem' }}>
         <h1 className="title">Mon Profil</h1>
-        <p className="subtitle">Gérez vos préférences et votre compte</p>
+        <p className="subtitle">Ton compte et tes préférences</p>
       </header>
 
       <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -35,7 +35,6 @@ const SettingsView = ({
           <input type="file" ref={avatarInputRef} hidden accept="image/*" onChange={(e) => { const file = e.target.files[0]; if (file) { setTempAvatarFile(file); setAvatarPreview(URL.createObjectURL(file)); } }} />
         </div>
         <h2 style={{ fontWeight: 800 }}>{profile?.name || 'Utilisateur'}</h2>
-        <p className="subtitle" style={{ fontSize: '0.8rem' }}>ID: {profile?.id}</p>
         
         {profile?.email && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '6px 15px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 800, marginTop: '1rem' }}>
@@ -46,7 +45,10 @@ const SettingsView = ({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
         <div className="glass-card" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontWeight: 800, marginBottom: '1rem', fontSize: '0.9rem' }}>VOTRE PLAN : {subscriptionTier === 'premium' ? 'PREMIUM ✨' : 'GRATUIT'}</h3>
+          <h3 style={{ fontWeight: 800, marginBottom: '0.4rem', fontSize: '0.9rem' }}>USAGE · {subscriptionTier === 'premium' ? 'PREMIUM' : 'GRATUIT'}</h3>
+          {subscriptionTier !== 'premium' && (
+            <p className="subtitle" style={{ fontSize: '0.78rem', lineHeight: 1.45, marginTop: 0 }}>L’illimité n’est pas encore en vente. Ces plafonds restent ceux du plan gratuit.</p>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '5px' }}><span>Garde-robe</span><span>{items.length} / {subscriptionTier === 'premium' ? '∞' : '50'}</span></div>
@@ -61,9 +63,6 @@ const SettingsView = ({
               </div>
             </div>
           </div>
-          {subscriptionTier !== 'premium' && (
-            <button type="button" className="btn-secondary" disabled style={{ width: '100%', marginTop: '1.5rem', opacity: 0.7, cursor: 'not-allowed' }} aria-disabled="true">Premium bientôt disponible</button>
-          )}
         </div>
 
         <div className="glass-card" style={{ padding: '1.5rem' }}>
@@ -77,14 +76,7 @@ const SettingsView = ({
           </div>
         </div>
 
-        <div className="glass-card" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontWeight: 800, marginBottom: '1.5rem', fontSize: '0.9rem', opacity: 0.4 }}>LÉGAL & AIDE</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <button className="list-item" onClick={() => window.open('https://dressflow.fr/support')}><LifeBuoy size={18} /> Support & Aide</button>
-            <button className="list-item" onClick={() => window.open('https://dressflow.fr/privacy')}><FileText size={18} /> Politique de confidentialité</button>
-            <button className="list-item" onClick={() => window.open('https://dressflow.fr/about')}><Info size={18} /> À propos de Dressflow</button>
-          </div>
-        </div>
+        <p className="subtitle" style={{ fontSize: '0.78rem', lineHeight: 1.5, marginTop: '0.5rem' }}>Tes photos restent privées, liées à ton compte.</p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '1rem' }}>
           <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ color: '#ef4444' }} onClick={handleLogout}><LogOut size={20} /> Déconnexion</motion.button>

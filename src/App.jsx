@@ -31,7 +31,7 @@ import AddClothingView from './views/AddClothingView'
 import { generatePackingList } from './utils/packing'
 import { 
   MAIN_CATEGORIES, CATEGORY_HIERARCHY, getIconForType, 
-  ALL_SEASONS, ALL_ACTIVITIES, ALL_COLORS, formatUID, findItemById 
+  ALL_SEASONS, ALL_ACTIVITIES, ALL_COLORS, currentSeason, formatUID, findItemById 
 } from './utils/helpers.jsx'
 
 function App() {
@@ -52,6 +52,10 @@ function App() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [lockedOutfit, setLockedOutfit] = useState({ top: null, bottom: null, layer: null, feet: null, head: null })
   const [suitcaseChecked, setSuitcaseChecked] = useState([])
+  const tripRef = useRef({ suitcase: [], suitcaseChecked: [], travelData: null, uid: '' })
+  const itemsRef = useRef([])
+  const avatarPathRef = useRef(null)
+  const imageRetryRef = useRef(new Set())
   
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
@@ -90,7 +94,7 @@ function App() {
   const fileInputRef = useRef(null)
   const galleryInputRef = useRef(null)
 
-  const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' })
+  const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', season: [currentSeason()], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
   const [tempFile, setTempFile] = useState(null)
 
@@ -114,7 +118,7 @@ function App() {
 
   const createPrivateUrl = async (bucket, path) => {
     if (!path) return null;
-    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 6 * 60 * 60);
     if (error) throw error;
     return data.signedUrl;
   };
@@ -186,13 +190,128 @@ function App() {
   }
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', gender) }, [gender])
-  
-  useEffect(() => {
-    const savedSuitcase = localStorage.getItem('suitcase'); const savedTravel = localStorage.getItem('travelData')
-    if (savedSuitcase) setSuitcase(JSON.parse(savedSuitcase)); if (savedTravel) setTravelData(JSON.parse(savedTravel))
-  }, [])
 
-  useEffect(() => { localStorage.setItem('suitcase', JSON.stringify(suitcase)); localStorage.setItem('travelData', JSON.stringify(travelData)) }, [suitcase, travelData])
+  tripRef.current = { suitcase, suitcaseChecked, travelData, uid };
+  itemsRef.current = items;
+  avatarPathRef.current = avatarPath;
+
+  const persistTrip = (patch = {}) => {
+    const current = tripRef.current;
+    if (!current.uid) return;
+    localStorage.setItem('dressflow_trip_' + current.uid, JSON.stringify({
+      suitcase: patch.suitcase ?? current.suitcase,
+      checked: patch.checked ?? current.suitcaseChecked,
+      travelData: patch.travelData ?? current.travelData
+    }));
+  };
+
+  const updateTravelData = (updater) => {
+    setTravelData(previous => {
+      const next = typeof updater === 'function' ? updater(previous) : updater;
+      const id = tripRef.current.uid;
+      if (id) {
+        localStorage.setItem('dressflow_trip_' + id, JSON.stringify({
+          suitcase: tripRef.current.suitcase,
+          checked: tripRef.current.suitcaseChecked,
+          travelData: next
+        }));
+      }
+      return next;
+    });
+  };
+
+  const toggleSuitcaseItem = (id) => {
+    const key = String(id);
+    setSuitcaseChecked(previous => {
+      const next = previous.includes(key) ? previous.filter(item => item !== key) : [...previous, key];
+      const owner = tripRef.current.uid;
+      if (owner) {
+        localStorage.setItem('dressflow_trip_' + owner, JSON.stringify({
+          suitcase: tripRef.current.suitcase,
+          checked: next,
+          travelData: tripRef.current.travelData
+        }));
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!uid) return;
+    const raw = localStorage.getItem('dressflow_trip_' + uid);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        setSuitcase(Array.isArray(parsed.suitcase) ? parsed.suitcase : []);
+        setSuitcaseChecked(Array.isArray(parsed.checked) ? parsed.checked.map(String) : []);
+        if (parsed.travelData && typeof parsed.travelData === 'object') {
+          setTravelData(previous => ({ ...previous, ...parsed.travelData }));
+        }
+      } catch {
+        setSuitcase([]);
+        setSuitcaseChecked([]);
+      }
+      return;
+    }
+    const legacySuitcase = localStorage.getItem('suitcase');
+    const legacyTravel = localStorage.getItem('travelData');
+    let nextSuitcase = [];
+    let nextTravel = null;
+    if (legacySuitcase) {
+      try { nextSuitcase = JSON.parse(legacySuitcase); } catch { nextSuitcase = []; }
+    }
+    if (legacyTravel) {
+      try { nextTravel = JSON.parse(legacyTravel); } catch { nextTravel = null; }
+    }
+    setSuitcase(Array.isArray(nextSuitcase) ? nextSuitcase : []);
+    setSuitcaseChecked([]);
+    if (nextTravel) setTravelData(previous => ({ ...previous, ...nextTravel }));
+    localStorage.setItem('dressflow_trip_' + uid, JSON.stringify({
+      suitcase: Array.isArray(nextSuitcase) ? nextSuitcase : [],
+      checked: [],
+      travelData: nextTravel || travelData
+    }));
+    localStorage.removeItem('suitcase');
+    localStorage.removeItem('travelData');
+  }, [uid])
+
+  const refreshSignedMedia = async () => {
+    const currentItems = itemsRef.current;
+    if (currentItems.length) {
+      const signedItems = await Promise.all(currentItems.map(async (item) => {
+        if (!item.image_path) return item;
+        try {
+          return { ...item, image_url: await createPrivateUrl('clothes-images', item.image_path) };
+        } catch {
+          return { ...item, image_url: null };
+        }
+      }));
+      setItems(signedItems);
+    }
+    const path = avatarPathRef.current;
+    if (path) setAvatarUrl(await createPrivateUrl('avatars', path).catch(() => null));
+  };
+
+  const handleImageError = async (item) => {
+    if (!item?.id || !item.image_path || imageRetryRef.current.has(item.id)) return;
+    imageRetryRef.current.add(item.id);
+    try {
+      const url = await createPrivateUrl('clothes-images', item.image_path);
+      setItems(previous => previous.map(entry => entry.id === item.id ? { ...entry, image_url: url } : entry));
+    } catch { /* The card falls back to its icon. */ }
+  };
+
+  useEffect(() => {
+    if (!uid) return undefined;
+    const refresh = () => { refreshSignedMedia().catch(() => {}); };
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = setInterval(refresh, 25 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(timer);
+    };
+  }, [uid])
 
   // Local convenience quota only; production entitlements must also be enforced server-side.
   useEffect(() => {
@@ -287,6 +406,7 @@ function App() {
       if (list.length === 0) throw new Error("Aucune pièce exploitable n’a été trouvée dans ton dressing.");
       setSuitcase(list);
       setSuitcaseChecked([]);
+      persistTrip({ suitcase: list, checked: [] });
       toast.success("Valise prête.");
     } catch (err) {
       toast.error(err.message || "Impossible de préparer la valise.");
@@ -297,8 +417,7 @@ function App() {
 
   const handleGenerateOutfitRequest = async () => {
     if (subscriptionTier === 'free' && aiGensRemaining <= 0) {
-      toast.error("Limite de compositions atteinte. Consulte ton plan dans Profil.");
-      setView('settings');
+      toast.error("Tu as utilisé tes 5 compositions gratuites. L’illimité n’est pas encore disponible.");
       return;
     }
     setOutfitLoading(true);
@@ -359,7 +478,7 @@ function App() {
       try { confetti({ particleCount: 110, spread: 75, origin: { y: 0.5 } }); } catch { /* Decorative only. */ }
       await fetchItems(uid);
       setView('dashboard');
-      toast.success("Tenue enregistrée dans l’historique.");
+      toast.success("Tenue marquée comme portée.");
     } catch (err) {
       toast.error(err.message || "Impossible d’enregistrer cette tenue.");
     } finally {
@@ -373,7 +492,8 @@ function App() {
   }
 
   const handleSelectCity = (city) => {
-    if (cityModalMode === 'home') initWeather(city.latitude, city.longitude, city.name); else setTravelData({ ...travelData, destination: city.name, lat: city.latitude, lon: city.longitude });
+    if (cityModalMode === 'home') initWeather(city.latitude, city.longitude, city.name);
+    else updateTravelData({ ...travelData, destination: city.name, lat: city.latitude, lon: city.longitude });
     setShowCityModal(false); setCitySearch(''); setCityResults([])
   }
 
@@ -523,8 +643,7 @@ function App() {
 
     const freeSlots = subscriptionTier === 'premium' ? files.length : Math.max(0, 50 - items.length);
     if (freeSlots === 0) {
-      toast.error("Limite du dressing gratuit atteinte.");
-      setView('settings');
+      toast.error("Limite de 50 pièces du plan gratuit atteinte. L’illimité n’est pas encore disponible.");
       return;
     }
     const acceptedFiles = files.slice(0, freeSlots);
@@ -539,7 +658,7 @@ function App() {
         const file = acceptedFiles[0];
         setTempFile(file);
         setSelectedImage(URL.createObjectURL(file));
-        setNewItem({ main_category: null, type: '', color: 'Blanc', season: ['Été'], activity: ['Quotidien'], icon: '👕' });
+        setNewItem({ main_category: null, type: '', color: 'Blanc', season: [currentSeason()], activity: ['Quotidien'], icon: '👕' });
         setView('add-detail');
       } else {
         const initialBulk = acceptedFiles.map(file => ({
@@ -548,7 +667,7 @@ function App() {
           main_category: 'Haut',
           type: 'T-shirt',
           color: 'Blanc',
-          season: ['Été', 'Hiver', 'Printemps', 'Automne'],
+          season: [currentSeason()],
           activity: ['Quotidien'],
           icon: '👕'
         }));
@@ -589,8 +708,7 @@ function App() {
           season: Array.isArray(item.season) ? item.season.join(', ') : item.season,
           activity: Array.isArray(item.activity) ? item.activity.join(', ') : item.activity,
           icon: item.icon,
-          image_url: fileName,
-          last_worn_date: new Date().toISOString()
+          image_url: fileName
         }]);
         if (insertError) {
           await supabase.storage.from('clothes-images').remove([fileName]);
@@ -618,8 +736,7 @@ function App() {
       return;
     }
     if (subscriptionTier === 'free' && items.length >= 50) {
-      toast.error("Limite du dressing gratuit atteinte.");
-      setView('settings');
+      toast.error("Limite de 50 pièces du plan gratuit atteinte. L’illimité n’est pas encore disponible.");
       return;
     }
     if (!newItem.main_category || !newItem.type || !newItem.color) {
@@ -639,8 +756,7 @@ function App() {
         ...newItem,
         season: Array.isArray(newItem.season) ? newItem.season.join(', ') : newItem.season,
         activity: Array.isArray(newItem.activity) ? newItem.activity.join(', ') : newItem.activity,
-        image_url: fileName,
-        last_worn_date: new Date().toISOString()
+        image_url: fileName
       }]);
       if (insertError) throw insertError;
       await fetchItems(uid); setView('dashboard'); setSelectedImage(null); setTempFile(null)
@@ -693,7 +809,7 @@ function App() {
           
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div className="logo-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">L'IA au service de votre style.</p></div>
+              <div className="logo-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><RotatingClothes /><h1 className="title">Dress<span style={{ color: 'var(--primary)' }}>flow</span></h1><p className="subtitle">Ton dressing, une tenue pour aujourd’hui.</p></div>
               <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', paddingBottom: '3rem' }}><motion.button whileTap={{ scale: 0.95 }} onClick={() => setView('register')} className="btn-primary">Créer mon dressing ✨</motion.button><motion.button whileTap={{ scale: 0.95 }} onClick={() => setView('login')} className="btn-secondary">J'ai déjà un compte</motion.button></div>
             </motion.div>
           )}
@@ -745,9 +861,9 @@ function App() {
             </motion.div>
           )}
 
-          {view === 'dashboard' && <DashboardView key="dashboard" items={items} loading={loading} activeFilter={activeFilter} setActiveFilter={setActiveFilter} filteredItems={filteredItems} onSelectItem={(item) => { setSelectedItem(item); setEditForm({ ...item }); setIsEditing(false); }} onAddClick={() => setView('add-choice')} weather={weather} weatherLoading={weatherLoading} onWeatherClick={() => { setCityModalMode('home'); setShowCityModal(true); }} />}
-          {view === 'stylist' && <StylistView key="stylist" stylistMode={stylistMode} setStylistMode={setStylistMode} currentOutfit={currentOutfit} outfitLoading={outfitLoading} handleGenerateOutfitRequest={handleGenerateOutfitRequest} handleValidateOutfit={handleValidateOutfit} manualItems={manualItems} manualOutfit={manualOutfit} setManualOutfit={setManualOutfit} loading={loading} lockedOutfit={lockedOutfit} setLockedOutfit={setLockedOutfit} />}
-          {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={setTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} setSuitcaseChecked={setSuitcaseChecked} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
+          {view === 'dashboard' && <DashboardView key="dashboard" items={items} loading={loading} activeFilter={activeFilter} setActiveFilter={setActiveFilter} filteredItems={filteredItems} onSelectItem={(item) => { setSelectedItem(item); setEditForm({ ...item }); setIsEditing(false); }} onAddClick={() => setView('add-choice')} weather={weather} weatherLoading={weatherLoading} onWeatherClick={() => { setCityModalMode('home'); setShowCityModal(true); }} onImageError={handleImageError} />}
+          {view === 'stylist' && <StylistView key="stylist" stylistMode={stylistMode} setStylistMode={setStylistMode} currentOutfit={currentOutfit} outfitLoading={outfitLoading} handleGenerateOutfitRequest={handleGenerateOutfitRequest} handleValidateOutfit={handleValidateOutfit} manualItems={manualItems} manualOutfit={manualOutfit} setManualOutfit={setManualOutfit} loading={loading} lockedOutfit={lockedOutfit} setLockedOutfit={setLockedOutfit} onImageError={handleImageError} />}
+          {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={updateTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} onTogglePacked={toggleSuitcaseItem} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
           {view === 'settings' && <SettingsView key="settings" profile={{id: uid, name, email, avatar_url: avatarUrl}} name={name} setName={setName} email={email} setEmail={setEmail} avatarPreview={avatarPreview} avatarInputRef={avatarInputRef} setTempAvatarFile={setTempAvatarFile} setAvatarPreview={setAvatarPreview} handleUpdateProfile={handleUpdateProfile} handleLogout={handleLogout} setShowDeleteModal={setShowDeleteModal} subscriptionTier={subscriptionTier} items={items} aiGensRemaining={aiGensRemaining} />}
           {['add-choice', 'bulk-add', 'loading-ai', 'add-detail'].includes(view) && <AddClothingView key="add" view={view} setView={setView} fileInputRef={fileInputRef} galleryInputRef={galleryInputRef} handleFileChange={handleFileChange} onAnalyzeClothing={handleAnalyzeClothing} analysisLoading={analysisLoading} analysisApplied={analysisApplied} bulkItems={bulkItems} setBulkItems={setBulkItems} handleBulkAdd={handleBulkAdd} loading={loading} selectedImage={selectedImage} newItem={newItem} setNewItem={setNewItem} handleAddItem={handleAddItem} getIconForType={getIconForType} />}
 

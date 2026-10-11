@@ -25,6 +25,14 @@ test('avoids adding the same physical wardrobe item twice', () => {
   assert.equal(new Set(list.map(item => String(item.id))).size, list.length);
 });
 
+test('prefers a never-worn piece over one worn today', () => {
+  const list = generatePackingList([
+    { id: 'fresh', type: 'T-shirt', main_category: 'Haut', last_worn_date: null },
+    { id: 'today', type: 'Chemise', main_category: 'Haut', last_worn_date: new Date().toISOString() }
+  ], { temp: 22, code: 0 }, 1);
+  assert.equal(list[0].id, 'fresh');
+});
+
 test('rejects invalid trip duration and empty wardrobes', () => {
   assert.deepEqual(generatePackingList(items, { temp: 20 }, 0), []);
   assert.deepEqual(generatePackingList([], { temp: 20 }, 3), []);

@@ -6,10 +6,11 @@
   --radius-lg: 32px;
   --radius-md: 20px;
   
-  /* Theme Female (Default) */
-  --primary: #fda4af;
+  /* Theme Female (Default) — accent dark enough for white label text */
+  --primary: #be185d;
   --secondary: #fecdd3;
-  --primary-glow: rgba(253, 164, 175, 0.4);
+  --primary-glow: rgba(190, 24, 93, 0.28);
+  --primary-rgb: 190, 24, 93;
   --bg-gradient: radial-gradient(circle at top left, #fff1f2, #fffcfd);
   --text-main: #1f2937;
   --text-muted: #6b7280;
@@ -18,18 +19,20 @@
 }
 
 [data-theme='male'] {
-  --primary: #3b82f6;
+  --primary: #1d4ed8;
   --secondary: #bfdbfe;
-  --primary-glow: rgba(59, 130, 246, 0.4);
+  --primary-glow: rgba(29, 78, 216, 0.28);
+  --primary-rgb: 29, 78, 216;
   --bg-gradient: radial-gradient(circle at top left, #eff6ff, #f8fafc);
   --text-main: #0f172a;
   --text-muted: #475569;
 }
 
 [data-theme='neutral'] {
-  --primary: #78716c;
+  --primary: #44403c;
   --secondary: #d6d3d1;
-  --primary-glow: rgba(120, 113, 108, 0.4);
+  --primary-glow: rgba(68, 64, 60, 0.28);
+  --primary-rgb: 68, 64, 60;
   --bg-gradient: radial-gradient(circle at top left, #f5f5f4, #fafaf9);
   --text-main: #1c1917;
   --text-muted: #57534e;

@@ -9,7 +9,7 @@ const TravelView = ({
   suitcaseLoading,
   handleGenerateSuitcase,
   suitcaseChecked,
-  setSuitcaseChecked,
+  onTogglePacked,
   setShowCityModal,
   setCityModalMode
 }) => {
@@ -50,10 +50,11 @@ const TravelView = ({
           <div className="progress-container"><div className="progress-bar-fill" style={{ width: `${(suitcaseChecked.length / suitcase.length) * 100}%` }}></div></div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem', marginTop: '1.5rem' }}>
-            {suitcase.map((pack, idx) => {
-              const isChecked = suitcaseChecked.includes(idx);
+            {suitcase.map((pack) => {
+              const packedId = String(pack.id);
+              const isChecked = suitcaseChecked.includes(packedId);
               return (
-                <motion.div key={idx} whileTap={{ scale: 0.98 }} className={`glass-card suitcase-item ${isChecked ? 'checked' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', cursor: 'pointer' }} onClick={() => setSuitcaseChecked(prev => isChecked ? prev.filter(i => i !== idx) : [...prev, idx])}>
+                <motion.div key={packedId} whileTap={{ scale: 0.98 }} className={`glass-card suitcase-item ${isChecked ? 'checked' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', cursor: 'pointer' }} onClick={() => onTogglePacked(packedId)}>
                   <div style={{ fontSize: '2rem' }}>{pack.icon}</div>
                   <div style={{ flex: 1 }}><div style={{ fontSize: '0.7rem', fontWeight: 800, opacity: 0.5 }}>{pack.category.toUpperCase()}</div><div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{pack.type}</div></div>
                   <div style={{ background: isChecked ? '#10b981' : 'var(--primary)', color: 'white', padding: '6px 14px', borderRadius: '12px', fontWeight: 900 }}>{isChecked ? <Check size={16} /> : `x${pack.qty}`}</div>

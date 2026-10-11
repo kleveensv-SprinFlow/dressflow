@@ -96,6 +96,14 @@ const AddClothingView = ({
                   </div>
                 </div>
               </div>
+              <div style={{ marginTop: '0.8rem' }}>
+                <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>COULEUR · {item.color}</label>
+                <ColorPalette selected={item.color} onSelect={(color) => {
+                  const nextBulk = [...bulkItems];
+                  nextBulk[idx] = { ...nextBulk[idx], color };
+                  setBulkItems(nextBulk);
+                }} />
+              </div>
             </div>
           ))}
         </div>
