@@ -1,18 +1,18 @@
-import { removeBackground as imglyRemoveBackground } from '@imgly/background-removal';
-
 /**
- * Service de détourage IA professionnel On-Device (0€ de coût, embarqué dans l'APK).
- * Utilise le modèle IA de segmentation de sujet (@imgly/background-removal)
- * servi directement depuis les assets locaux (`public/imgly-data/`).
+ * Service de détourage photo de vêtements (Background Removal).
  * 
- * Avantages :
- * - Fonctionne hors-ligne sans aucun téléchargement au premier démarrage.
- * - Reconnaît la doudoune, le t-shirt ou le pantalon même si le tissu est blanc sur fond blanc.
- * - Aucun crash natif : tourne dans un Web Worker WebAssembly sécurisé.
+ * 1. Découpe IA studio haute précision via API dédiée (ClearBackdrop) :
+ *    - 0€ de coût (quota gratuit).
+ *    - Découpe chirurgicale des silhouettes (doudounes, robes, vestes, t-shirts, pantalons).
+ *    - Ne troue jamais les vêtements blancs sur fond blanc.
+ * 2. Rognage automatique de la transparence (bounding box serrée style Whering).
+ * 3. En cas de perte de connexion réseau (mode avion/hors-ligne), bascule automatiquement
+ *    vers la photo originale sans bloquer ni crasher.
  */
 
 /**
- * Rogne la transparence superflue autour de la pièce détourée
+ * Rogne la transparence inutile autour du vêtement détouré
+ * et redimensionne à maxDimension (par défaut 1024px)
  */
 export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 1024) => {
   return new Promise((resolve, reject) => {
@@ -37,10 +37,11 @@ export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 102
         let minX = width, minY = height, maxX = 0, maxY = 0;
         let hasVisiblePixel = false;
 
+        // Détection de la bounding box des pixels non transparents
         for (let y = 0; y < height; y++) {
           for (let x = 0; x < width; x++) {
             const alpha = data[(y * width + x) * 4 + 3];
-            if (alpha > 20) {
+            if (alpha > 20) { // Seuil d'opacité
               hasVisiblePixel = true;
               if (x < minX) minX = x;
               if (x > maxX) maxX = x;
@@ -54,12 +55,14 @@ export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 102
           return resolve(imageBlob);
         }
 
+        // Ajouter une marge de 3%
         const padding = Math.round(Math.max(width, height) * 0.03);
         const cropX = Math.max(0, minX - padding);
         const cropY = Math.max(0, minY - padding);
         const cropW = Math.min(width - cropX, (maxX - minX) + padding * 2);
         const cropH = Math.min(height - cropY, (maxY - minY) + padding * 2);
 
+        // Calcul du redimensionnement (maxDimension)
         let finalW = cropW;
         let finalH = cropH;
         if (finalW > maxDimension || finalH > maxDimension) {
@@ -80,7 +83,7 @@ export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 102
           else resolve(imageBlob);
         }, 'image/webp', 0.9);
       } catch (e) {
-        console.warn('Erreur rognage Canvas:', e);
+        console.warn('Erreur rognage Canvas, repli vers blob brut:', e);
         resolve(imageBlob);
       }
     };
@@ -93,9 +96,10 @@ export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 102
 };
 
 /**
- * Redimensionne préventivement l'image si elle dépasse 1200px pour accélérer l'inférence IA
+ * Redimensionne préventivement l'image à 1200px max avant l'envoi
+ * pour un transfert rapide et économe en données mobiles.
  */
-const prepareImageForAI = async (file, maxDim = 1200) => {
+const prepareImageForUpload = async (file, maxDim = 1200) => {
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -138,29 +142,35 @@ const prepareImageForAI = async (file, maxDim = 1200) => {
 };
 
 /**
- * Supprime l'arrière-plan avec le modèle IA embarqué localement
+ * Supprime l'arrière-plan d'une photo de vêtement via API IA haute fidélité.
+ * Si le réseau échoue ou est hors-ligne, conserve gracieusement la photo d'origine.
  */
 export const removeBackground = async (file) => {
   try {
-    const optimizedFile = await prepareImageForAI(file, 1200);
+    const optimizedFile = await prepareImageForUpload(file, 1200);
 
-    // Détermination de l'URL publique locale des assets IA
-    const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
-    const publicPath = `${origin}/imgly-data/`;
+    const formData = new FormData();
+    formData.append('image', optimizedFile, optimizedFile.name || 'clothing.jpg');
 
-    const config = {
-      publicPath,
-      model: 'small', // Modèle IA optimisé pour mobile
-      output: {
-        format: 'image/webp',
-        quality: 0.9
-      }
-    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout max
 
-    const resultBlob = await imglyRemoveBackground(optimizedFile, config);
+    const response = await fetch('https://clearbackdrop.com/api/v1/remove-background', {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    });
 
-    // Rognage automatique de l'espace vide autour de la silhouette
-    const trimmedBlob = await trimAndScaleTransparentImage(resultBlob, 1024);
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Erreur API détourage (${response.status})`);
+    }
+
+    const cutoutBlob = await response.blob();
+
+    // Rognage automatique de l'espace vide transparent pour centrer la silhouette
+    const trimmedBlob = await trimAndScaleTransparentImage(cutoutBlob, 1024);
 
     const baseName = (file.name || 'clothing').replace(/\.[^/.]+$/, "");
     const processedFile = new File([trimmedBlob], `${baseName}_cutout.webp`, { type: 'image/webp' });
@@ -169,12 +179,12 @@ export const removeBackground = async (file) => {
       file: processedFile,
       removed: true
     };
-  } catch (err) {
-    console.warn("Échec détourage IA, repli photo d'origine:", err);
+  } catch (error) {
+    console.warn("Détourage API non disponible, conservation de l'original:", error);
     return {
       file,
       removed: false,
-      reason: err?.message || 'error'
+      reason: error?.message || 'error'
     };
   }
 };
