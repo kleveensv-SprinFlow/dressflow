@@ -198,15 +198,15 @@ const DashboardView = ({
             <div className="onboarding-step-item">
               <div className="step-num">2</div>
               <div className="step-text">
-                <strong>L'IA styliste harmonise</strong>
-                <span>Reconnaissance des couleurs, coupes et styles</span>
+                <strong>Algorithme de style</strong>
+                <span>Harmonie des couleurs, météo et coupes</span>
               </div>
             </div>
             <div className="onboarding-step-item">
               <div className="step-num">3</div>
               <div className="step-text">
                 <strong>Tenues prêtes chaque jour</strong>
-                <span>Des associations parfaites générées en 1 clic</span>
+                <span>Des associations cohérentes calculées en 1 clic</span>
               </div>
             </div>
           </div>

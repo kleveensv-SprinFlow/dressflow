@@ -174,7 +174,7 @@ const pairwiseColorScore = (colors) => {
   return average(scores);
 };
 
-const outfitScore = (pieces, roles, temp, rainy, previousIds) => {
+const outfitScore = (pieces, roles, temp, rainy, previousIds, targetActivity = null) => {
   const colors = colorsFor(pieces);
   const colorScore = pairwiseColorScore(colors);
   const weather = average(pieces.map(piece => weatherScore(piece, roles.get(piece.id) || 'top', temp, rainy)));
@@ -183,17 +183,27 @@ const outfitScore = (pieces, roles, temp, rainy, previousIds) => {
   const structure = pieces.some(isOnePiece) ? 95 : (pieces.some(piece => roles.get(piece.id) === 'top') && pieces.some(piece => roles.get(piece.id) === 'bottom') ? 100 : 55);
   const reused = pieces.filter(piece => previousIds.has(String(piece.id))).length;
   const variety = Math.max(0, 100 - reused * 24);
-  return colorScore * 0.32 + weather * 0.22 + season * 0.14 + rotation * 0.12 + structure * 0.12 + variety * 0.08 + Math.random() * 2.2;
+
+  // Occasion / Activité : priorité intelligente sans blocage
+  let activityBonus = 0;
+  if (targetActivity && targetActivity !== 'Toutes') {
+    const normTarget = normalize(targetActivity);
+    const matches = pieces.filter(p => values(p?.activity).map(normalize).includes(normTarget)).length;
+    activityBonus = matches * 14;
+  }
+
+  return colorScore * 0.30 + weather * 0.20 + season * 0.12 + rotation * 0.12 + structure * 0.12 + variety * 0.08 + activityBonus + Math.random() * 2.2;
 };
 
 /**
- * Local, explainable outfit engine. It uses the wardrobe metadata and rules; no remote AI call is made.
- * The lock map accepts either item IDs or item objects so older UI state remains compatible.
+ * Moteur algorithmique de style local et explicable.
+ * Utilise la colorimétrie, la météo, la rotation du dressing et l'occasion sans appel externe.
  */
-export const generateOutfit = async (items, weather = {}, lockedValues = {}, previousOutfit = null) => {
+export const generateOutfit = async (items, weather = {}, lockedValues = {}, previousOutfit = null, options = {}) => {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Ton dressing est vide. Ajoute quelques pièces pour composer une tenue.');
   }
+  const targetActivity = options?.activity || null;
   const tempValue = Number(weather?.temp ?? weather?.current_weather?.temperature);
   const temp = Number.isFinite(tempValue) ? tempValue : 20;
   const code = Number(weather?.code ?? weather?.current_weather?.weathercode);
@@ -254,7 +264,7 @@ export const generateOutfit = async (items, weather = {}, lockedValues = {}, pre
             const outerwearBonus = layer
               ? (temp <= 8 ? 20 : temp <= 14 ? 13 : temp <= 18 ? 7 : temp <= 22 ? 2 : -6)
               : (temp <= 8 && layers.length > 0 ? -14 : temp <= 14 && layers.length > 0 ? -8 : temp <= 18 && layers.length > 0 ? -4 : 0);
-            const score = outfitScore(pieces, roles, temp, rainy, previousIds) + outerwearBonus;
+            const score = outfitScore(pieces, roles, temp, rainy, previousIds, targetActivity) + outerwearBonus;
             if (score > bestScore) {
               best = { top, bottom, layer, shoe, head, pieces };
               bestScore = score;
@@ -276,6 +286,7 @@ export const generateOutfit = async (items, weather = {}, lockedValues = {}, pre
         ? 'aucune couche adaptée n’est disponible dans ton dressing'
         : 'une tenue plus légère est privilégiée';
   const colorHarmony = pairwiseColorScore(colors);
+  const activityNote = targetActivity && targetActivity !== 'Toutes' ? ` Style adapté pour : ${targetActivity}.` : '';
   return {
     top_id: best.top?.id ?? null,
     bottom_id: best.bottom?.id ?? null,
@@ -283,6 +294,6 @@ export const generateOutfit = async (items, weather = {}, lockedValues = {}, pre
     feet_id: best.shoe?.id ?? null,
     head_id: best.head?.id ?? null,
     color_harmony: Math.round(colorHarmony),
-    explanation: `Couleurs : ${harmony}. À ${temp}°C, ${outerwearMessage}. Les pièces peu portées sont favorisées ; adapte le résultat à ton confort et à tes goûts.`
+    explanation: `Couleurs : ${harmony}. À ${temp}°C, ${outerwearMessage}.${activityNote} Les pièces peu portées sont favorisées ; adapte le résultat à ton confort.`
   };
 };

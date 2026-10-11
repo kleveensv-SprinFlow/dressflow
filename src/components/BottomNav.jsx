@@ -14,7 +14,7 @@ const BottomNav = ({ activeTab, onTabChange }) => {
   return (
     <nav className="bottom-nav" aria-label="Navigation principale">
       {tabs.map(({ id, label, icon: Icon, primary }) => {
-        const active = activeTab === id || (id === 'add-choice' && ['add-choice', 'add-detail', 'bulk-add', 'loading-ai'].includes(activeTab));
+        const active = activeTab === id || (id === 'add-choice' && ['add-choice', 'add-detail', 'bulk-add'].includes(activeTab));
         return (
           <motion.button
             type="button"

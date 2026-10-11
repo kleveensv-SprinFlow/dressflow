@@ -62,3 +62,16 @@ test('invalid locks are rejected instead of producing an empty outfit', async ()
     /n’est plus disponible/
   );
 });
+
+test('prioritises target activity when items are tagged with it', async () => {
+  const customWardrobe = [
+    makeItem('top-casual', 'T-shirt', 'Blanc', 'Haut', { activity: 'Quotidien' }),
+    makeItem('top-work', 'Chemise', 'Bleu Ciel', 'Haut', { activity: 'Travail' }),
+    makeItem('bottom-casual', 'Jean', 'Bleu Ciel', 'Bas', { activity: 'Quotidien' }),
+    makeItem('bottom-work', 'Pantalon', 'Noir', 'Bas', { activity: 'Travail' }),
+  ];
+  const workOutfit = await generateOutfit(customWardrobe, { temp: 20 }, {}, null, { activity: 'Travail' });
+  assert.equal(workOutfit.top_id, 'top-work');
+  assert.equal(workOutfit.bottom_id, 'bottom-work');
+  assert.ok(workOutfit.explanation.includes('Travail'));
+});

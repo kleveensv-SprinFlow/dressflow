@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Camera, Image as ImageIcon, Loader2, Sparkles, Layers, Tag, Palette, Sun, Briefcase } from 'lucide-react';
+import { Camera, Image as ImageIcon, Loader2, Layers, Tag, Palette, Sun, Briefcase, Check } from 'lucide-react';
 import { ChoiceSelector, SearchSelector, ColorPalette } from '../components/UIElements';
 import { MAIN_CATEGORIES, CATEGORY_HIERARCHY, ALL_SEASONS, ALL_ACTIVITIES, getSeasonIcon, getActivityIcon } from '../utils/helpers.jsx';
 
@@ -10,9 +10,6 @@ const AddClothingView = ({
   fileInputRef,
   galleryInputRef,
   handleFileChange,
-  onAnalyzeClothing,
-  analysisLoading,
-  analysisApplied,
   bulkItems,
   setBulkItems,
   handleBulkAdd,
@@ -26,7 +23,10 @@ const AddClothingView = ({
   if (view === 'add-choice') {
     return (
       <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: '2rem' }}>
-        <header style={{ textAlign: 'center' }}><h2 className="title" style={{ fontSize: '2.2rem' }}>Ajouter une pièce</h2><p className="subtitle">Choisissez votre méthode d'importation</p></header>
+        <header style={{ textAlign: 'center' }}>
+          <h2 className="title" style={{ fontSize: '2rem' }}>Ajouter un vêtement</h2>
+          <p className="subtitle">Prends une photo ou choisis dans ta galerie</p>
+        </header>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
           <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed var(--primary)', cursor: 'pointer' }}>
             <div style={{ background: 'var(--primary)', color: 'white', padding: '20px', borderRadius: '25px' }}><Camera size={35} /></div>
@@ -52,7 +52,7 @@ const AddClothingView = ({
           {bulkItems.map((item, idx) => (
             <div key={idx} className="glass-card" style={{ padding: '1.2rem' }}>
               <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                <div style={{ width: '80px', height: '80px', borderRadius: '15px', overflow: 'hidden', background: 'white', border: '1px solid rgba(0,0,0,0.05)' }}><img src={item.preview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
+                <div style={{ width: '80px', height: '80px', borderRadius: '15px', overflow: 'hidden', background: 'white', border: '1px solid rgba(0,0,0,0.05)' }}><img src={item.preview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Aperçu vêtement" /></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ marginBottom: '10px' }}>
                     <label className="subtitle" style={{ fontSize: '0.55rem', fontWeight: 900, marginBottom: '4px', display: 'block' }}>CATÉGORIE</label>
@@ -115,71 +115,125 @@ const AddClothingView = ({
     );
   }
 
-  if (view === 'loading-ai') {
-    return (
-      <motion.div key="loading-ai" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem' }}>
-        <div style={{ position: 'relative', width: '120px', height: '120px' }}>
-          <motion.div animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 2 }} style={{ width: '100%', height: '100%', background: 'var(--primary)', borderRadius: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 15px 35px rgba(var(--primary-rgb), 0.3)' }}>
-            <Sparkles size={50} />
-          </motion.div>
-        </div>
-        <h2 className="title" style={{ marginTop: '2.5rem', fontSize: '1.8rem' }}>Analyse en cours...</h2>
-        <p className="subtitle" style={{ maxWidth: '250px' }}>Notre IA identifie les détails de votre vêtement pour vous.</p>
-      </motion.div>
-    );
-  }
-
   if (view === 'add-detail') {
     return (
       <motion.div key="add-detail" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -100, opacity: 0 }} className="dashboard-container" style={{ width: '100%', paddingBottom: '120px' }}>
-        <header style={{ marginBottom: '1.5rem', textAlign: 'center' }}><h2 className="title" style={{ fontSize: '1.8rem' }}>Vérification</h2></header>
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: '35px', overflow: 'hidden', background: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', marginBottom: '2rem' }}>
-          <img src={selectedImage} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Aperçu du vêtement sélectionné" />
-          <div className="ai-badge">{analysisApplied ? 'SUGGESTIONS IA · À VÉRIFIER' : 'PHOTO SÉLECTIONNÉE'}</div>
-        </div>
+        <header style={{ marginBottom: '1.2rem', textAlign: 'center' }}>
+          <h2 className="title" style={{ fontSize: '1.8rem' }}>Détails du vêtement</h2>
+        </header>
 
-        <div className="glass-card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
-          <motion.button whileTap={{ scale: 0.98 }} className="btn-secondary" style={{ width: '100%' }} onClick={onAnalyzeClothing} disabled={analysisLoading || loading}>
-            {analysisLoading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
-            {analysisLoading ? 'Analyse de l’image…' : analysisApplied ? 'Relancer les suggestions' : 'Suggérer les détails avec l’IA'}
-          </motion.button>
-          <p className="subtitle" style={{ fontSize: '0.76rem', lineHeight: 1.45, marginTop: '0.75rem', marginBottom: 0 }}>
-            La reconnaissance peut se tromper, notamment sur la couleur. Vérifie toujours les propositions avant d’enregistrer.
-          </p>
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: '35px', overflow: 'hidden', background: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.08)', marginBottom: '1.5rem' }}>
+          <img src={selectedImage} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Aperçu du vêtement sélectionné" />
+          <div className="ai-badge" style={{ background: 'white', color: 'var(--text-main)', border: '1px solid rgba(0,0,0,0.08)' }}>
+            PHOTO ENREGISTRÉE
+          </div>
         </div>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.8rem' }}>
+          {/* 1. CATÉGORIE */}
           <section>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Layers size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>1. Catégorie</label></div>
-            <ChoiceSelector options={MAIN_CATEGORIES} selected={newItem.main_category} onSelect={(val) => setNewItem({...newItem, main_category: val, type: ''})} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <Layers size={16} color="var(--primary)" />
+              <label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>
+                1. Catégorie
+              </label>
+            </div>
+            <ChoiceSelector
+              options={MAIN_CATEGORIES}
+              selected={newItem.main_category}
+              onSelect={(val) => setNewItem({ ...newItem, main_category: val, type: '' })}
+            />
           </section>
 
+          {/* 2. TYPE */}
           {newItem.main_category && (
             <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Tag size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>2. Type de {newItem.main_category.toLowerCase()}</label></div>
-              <SearchSelector options={CATEGORY_HIERARCHY[newItem.main_category] || []} selected={newItem.type} onSelect={(val) => setNewItem({...newItem, type: val, icon: getIconForType(val)})} placeholder={`Ex: ${CATEGORY_HIERARCHY[newItem.main_category][0]}...`} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <Tag size={16} color="var(--primary)" />
+                <label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>
+                  2. Type de {newItem.main_category.toLowerCase()}
+                </label>
+              </div>
+              <SearchSelector
+                options={CATEGORY_HIERARCHY[newItem.main_category] || []}
+                selected={newItem.type}
+                onSelect={(val) => setNewItem({ ...newItem, type: val, icon: getIconForType(val) })}
+                placeholder={`Ex: ${CATEGORY_HIERARCHY[newItem.main_category][0]}...`}
+              />
             </motion.section>
           )}
 
+          {/* 3. COULEUR */}
           <section>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Palette size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Couleur</label></div>
-            <ColorPalette selected={newItem.color} onSelect={(val) => setNewItem({...newItem, color: val})} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Palette size={16} color="var(--primary)" />
+                <label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>
+                  3. Couleur · {newItem.color}
+                </label>
+              </div>
+              {newItem.color && (
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <Check size={12} /> Détectée
+                </span>
+              )}
+            </div>
+            <ColorPalette selected={newItem.color} onSelect={(val) => setNewItem({ ...newItem, color: val })} />
           </section>
 
+          {/* 4. SAISONS */}
           <section>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Sun size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Saisons</label></div>
-            <ChoiceSelector multi options={ALL_SEASONS} selected={newItem.season} onSelect={(val) => setNewItem({...newItem, season: val})} getIcon={getSeasonIcon} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <Sun size={16} color="var(--primary)" />
+              <label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>
+                4. Saisons
+              </label>
+            </div>
+            <ChoiceSelector
+              options={ALL_SEASONS}
+              selected={newItem.season}
+              onSelect={(val) => setNewItem({ ...newItem, season: val })}
+              getIcon={getSeasonIcon}
+              multi={true}
+            />
           </section>
 
+          {/* 5. ACTIVITÉ / OCCASION */}
           <section>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}><Briefcase size={16} color="var(--primary)" /><label className="subtitle" style={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>Activités</label></div>
-            <ChoiceSelector multi options={ALL_ACTIVITIES} selected={newItem.activity} onSelect={(val) => setNewItem({...newItem, activity: val})} getIcon={getActivityIcon} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <Briefcase size={16} color="var(--primary)" />
+              <label className="subtitle" style={{ fontSize: '0.7rem', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>
+                5. Activité
+              </label>
+            </div>
+            <ChoiceSelector
+              options={ALL_ACTIVITIES}
+              selected={newItem.activity}
+              onSelect={(val) => setNewItem({ ...newItem, activity: val })}
+              getIcon={getActivityIcon}
+              multi={true}
+            />
           </section>
-        </div>
 
-        <div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', zIndex: 100, background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', padding: '15px', borderRadius: '25px', display: 'flex', gap: '1rem', boxShadow: '0 -10px 25px rgba(0,0,0,0.05)' }}>
-          <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" style={{ flex: 2 }} onClick={handleAddItem} disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : 'Ajouter ✨'}</motion.button>
-          <motion.button whileTap={{ scale: 0.95 }} className="btn-secondary" style={{ flex: 1 }} onClick={() => setView('dashboard')}>Annuler</motion.button>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              className="btn-primary"
+              style={{ flex: 2 }}
+              onClick={handleAddItem}
+              disabled={loading || !newItem.main_category || !newItem.type}
+            >
+              {loading ? <Loader2 className="animate-spin" /> : "Enregistrer"}
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              className="btn-secondary"
+              style={{ flex: 1 }}
+              onClick={() => setView('dashboard')}
+            >
+              Annuler
+            </motion.button>
+          </div>
         </div>
       </motion.div>
     );
