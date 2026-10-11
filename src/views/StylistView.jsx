@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Wand2, RefreshCw, Check, Lock, Unlock, Sparkles, ChevronLeft, ChevronRight, X, Layers
+  RefreshCw, Check, Sparkles, X, Pin
 } from 'lucide-react';
 import { SlotMachine } from '../components/UIElements';
 
@@ -21,56 +21,34 @@ const GARMENT_HEIGHT = {
   'Bonnet': 62,
   'Chapeau': 70,
   'Bob': 58,
-  'T-shirt': 168,
-  'Top / Blouse': 160,
-  'Chemise': 188,
-  'Pull': 178,
-  'Sweat': 182,
-  'Veste': 206,
-  'Manteau': 248,
-  'Robe': 300,
-  'Pantalon': 214,
-  'Jean': 214,
-  'Jogging': 206,
-  'Legging': 206,
-  'Short': 132,
-  'Jupe': 156,
-  'Baskets': 70,
-  'Ville': 70,
-  'Sandales': 62,
-  'Talons': 76,
-  'Bottes': 108,
-  'Sac': 120
+  'T-shirt': 136,
+  'Top / Blouse': 130,
+  'Chemise': 148,
+  'Pull': 142,
+  'Sweat': 144,
+  'Veste': 150,
+  'Manteau': 168,
+  'Robe': 210,
+  'Pantalon': 158,
+  'Jean': 158,
+  'Jogging': 152,
+  'Legging': 152,
+  'Short': 108,
+  'Jupe': 124,
+  'Baskets': 64,
+  'Ville': 64,
+  'Sandales': 56,
+  'Talons': 68,
+  'Bottes': 96,
+  'Sac': 110
 };
 
-const SLOT_HEIGHT = { head: 72, layer: 196, top: 168, bottom: 214, feet: 70, bag: 120 };
-const TALLEST = 300;
-const PIECE_OVERLAP = { head: -4, layer: -42, top: -28, bottom: -14, feet: 0, bag: 0 };
+const SLOT_HEIGHT = { head: 64, layer: 150, top: 136, bottom: 158, feet: 64, bag: 110 };
+const TALLEST = 210;
 
 function garmentHeight(item, slot) {
   if (item?.type && GARMENT_HEIGHT[item.type]) return GARMENT_HEIGHT[item.type];
-  return SLOT_HEIGHT[slot?.key] || 168;
-}
-
-function nudgeStyle(side) {
-  return {
-    position: 'absolute',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    [side]: -4,
-    width: 28,
-    height: 28,
-    borderRadius: '50%',
-    border: 'none',
-    background: 'rgba(255,255,255,0.92)',
-    color: 'var(--text-main)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 2px 8px rgba(45, 38, 35, 0.08)',
-    cursor: 'pointer',
-    zIndex: 6
-  };
+  return SLOT_HEIGHT[slot?.key] || 136;
 }
 
 export default function StylistView({
@@ -176,9 +154,9 @@ export default function StylistView({
     <div className="dashboard-container" style={{ paddingBottom: '130px' }}>
       {/* Header boutique feutré */}
       <header style={{ marginBottom: '1.2rem', textAlign: 'center' }}>
-        <h1 className="title" style={{ fontSize: '1.85rem', letterSpacing: '-0.5px' }}>Silhouette & Look</h1>
+        <h1 className="title" style={{ fontSize: '1.85rem', letterSpacing: '-0.5px' }}>Habille-moi</h1>
         <p className="subtitle" style={{ fontSize: '0.86rem', marginTop: '4px' }}>
-          Touche une pièce pour la changer. Glisse-la pour la suivante.
+          Glisse une rangée pour changer la pièce. Épingle pour la garder.
         </p>
       </header>
 
@@ -208,37 +186,35 @@ export default function StylistView({
         </div>
       ) : (
         <>
-          {/* Une seule silhouette, sans cartes : les pièces flottent les unes sous les autres. */}
+          {/* Rangées façon Whering : la pièce d’avant et la suivante dépassent, sans se chevaucher. */}
           <div style={{
             background: '#ffffff',
             borderRadius: '28px',
-            padding: '1.6rem 0.6rem 1.2rem',
+            padding: '1.2rem 0 1rem',
             marginBottom: '1.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
+            overflow: 'hidden'
           }}>
             {SILHOUETTE_SLOTS.map(slot => {
               const item = getActiveItem(slot.key);
               const pool = getSlotPool(slot.key);
-              const hasOptions = pool.length > 1;
               const locked = isSlotLocked(slot.key);
-
-              if (!item && slot.optional && !pool.length) return null;
+              if (!item && !pool.length) return null;
 
               if (!item) {
                 return (
                   <button
                     key={slot.key}
                     type="button"
-                    onClick={() => { if (pool.length) setActivePickerSlot(slot); }}
+                    onClick={() => setActivePickerSlot(slot)}
                     style={{
+                      display: 'block',
+                      width: '100%',
                       border: 'none',
                       background: 'transparent',
                       color: 'var(--text-muted)',
                       fontSize: '0.78rem',
                       fontWeight: 700,
-                      padding: '6px 10px',
+                      padding: '10px',
                       cursor: 'pointer'
                     }}
                   >
@@ -247,101 +223,92 @@ export default function StylistView({
                 );
               }
 
+              const index = Math.max(0, pool.findIndex(piece => piece.id === item.id));
+              const prev = pool.length > 1 ? pool[(index - 1 + pool.length) % pool.length] : null;
+              const next = pool.length > 1 ? pool[(index + 1) % pool.length] : null;
+              const height = garmentHeight(item, slot);
+
+              const figure = (piece, faded) => {
+                if (!piece) return <span />;
+                const h = faded ? Math.round(height * 0.72) : height;
+                if (!piece.image_url) {
+                  return <span style={{ fontSize: faded ? '1.5rem' : '2.2rem', opacity: faded ? 0.35 : 1 }}>{piece.icon || slot.defaultIcon}</span>;
+                }
+                return (
+                  <img
+                    src={piece.image_url}
+                    alt={piece.type || slot.label}
+                    draggable={false}
+                    style={{
+                      height: h,
+                      width: 'auto',
+                      maxWidth: faded ? 96 : 168,
+                      objectFit: 'contain',
+                      opacity: faded ? 0.4 : 1,
+                      filter: faded ? 'none' : 'drop-shadow(0 8px 12px rgba(45, 38, 35, 0.12))',
+                      pointerEvents: 'none'
+                    }}
+                    onError={() => onImageError?.(piece)}
+                  />
+                );
+              };
+
               return (
-                <div
+                <motion.div
                   key={slot.key}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.16}
+                  onDragEnd={(e, info) => {
+                    if (info.offset.x > 36) stepSlotItem(slot.key, 'prev');
+                    else if (info.offset.x < -36) stepSlotItem(slot.key, 'next');
+                  }}
                   style={{
-                    position: 'relative',
-                    width: '86%',
-                    maxWidth: '300px',
-                    height: garmentHeight(item, slot),
-                    marginBottom: PIECE_OVERLAP[slot.key] || 0,
-                    zIndex: slot.key === 'layer' ? 4 : slot.key === 'top' ? 3 : slot.key === 'bottom' ? 2 : 1
+                    height,
+                    marginBottom: 22,
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center',
+                    cursor: 'grab',
+                    touchAction: 'pan-y'
                   }}
                 >
-                  <motion.div
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => { if (pool.length > 0) setActivePickerSlot(slot); }}
-                    drag="x"
-                    dragConstraints={{ left: 0, right: 0 }}
-                    dragElastic={0.2}
-                    onDragEnd={(e, info) => {
-                      if (info.offset.x > 40) stepSlotItem(slot.key, 'prev');
-                      else if (info.offset.x < -40) stepSlotItem(slot.key, 'next');
-                    }}
-                    style={{
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      touchAction: 'pan-y'
-                    }}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 10, minWidth: 0 }}>
+                    {figure(prev, true)}
+                  </div>
+                  <div
+                    style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}
+                    onClick={() => { if (pool.length) setActivePickerSlot(slot); }}
                   >
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.type || slot.label}
-                        style={{
-                          height: '100%',
-                          width: 'auto',
-                          maxWidth: '100%',
-                          objectFit: 'contain',
-                          filter: 'drop-shadow(0 12px 16px rgba(45, 38, 35, 0.14))',
-                          pointerEvents: 'none'
-                        }}
-                        onError={() => onImageError?.(item)}
-                      />
-                    ) : (
-                      <span style={{ fontSize: '3rem', pointerEvents: 'none' }}>{item.icon || slot.defaultIcon}</span>
-                    )}
-                  </motion.div>
-
-                  {hasOptions && (
-                    <>
-                      <button
-                        type="button"
-                        aria-label="Pièce précédente"
-                        onClick={(e) => stepSlotItem(slot.key, 'prev', e)}
-                        style={nudgeStyle('left')}
-                      >
-                        <ChevronLeft size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Pièce suivante"
-                        onClick={(e) => stepSlotItem(slot.key, 'next', e)}
-                        style={nudgeStyle('right')}
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                    </>
-                  )}
-
-                  <button
-                    type="button"
-                    aria-label={locked ? 'Déverrouiller' : 'Verrouiller'}
-                    onClick={(e) => toggleLock(slot.key, e)}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      right: -6,
-                      width: 26,
-                      height: 26,
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: locked ? 'var(--primary)' : 'transparent',
-                      color: locked ? '#ffffff' : 'rgba(45, 38, 35, 0.35)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      zIndex: 5
-                    }}
-                  >
-                    {locked ? <Lock size={13} /> : <Unlock size={13} />}
-                  </button>
-                </div>
+                    {figure(item, false)}
+                    <button
+                      type="button"
+                      aria-label={locked ? 'Désépingler' : 'Épingler'}
+                      onClick={(e) => toggleLock(slot.key, e)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: -4,
+                        width: 26,
+                        height: 26,
+                        border: 'none',
+                        borderRadius: '50%',
+                        background: locked ? '#d6ff4a' : 'transparent',
+                        color: '#1c1917',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        zIndex: 2
+                      }}
+                    >
+                      <Pin size={14} fill={locked ? '#1c1917' : 'none'} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', paddingLeft: 10, minWidth: 0 }}>
+                    {figure(next, true)}
+                  </div>
+                </motion.div>
               );
             })}
           </div>
