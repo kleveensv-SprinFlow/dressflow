@@ -4,16 +4,25 @@ export const getLocalWeather = async (lat = null, lon = null) => {
   try {
     // Si pas de coordonnées, on essaie la géolocalisation
     if (lat == null || lon == null) {
+      if (!globalThis.navigator?.geolocation) throw new Error('La localisation n’est pas disponible sur cet appareil. Choisis une ville manuellement.');
       const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 })
       })
       lat = pos.coords.latitude
       lon = pos.coords.longitude
     }
 
-    const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min&timezone=auto`
-    )
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    let response;
+    try {
+      response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min&timezone=auto`,
+        { signal: controller.signal }
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!response.ok) throw new Error('Le service météo ne répond pas.');
     const data = await response.json();
     if (!data.current_weather) throw new Error('Les données météo sont indisponibles.');
@@ -30,8 +39,12 @@ export const getLocalWeather = async (lat = null, lon = null) => {
       lon
     }
   } catch (error) {
-    console.error("Erreur météo:", error);
-    throw new Error("Météo indisponible. Vérifie la connexion ou réessaie dans quelques instants.");
+    console.error('Erreur météo:', error);
+    if (error?.name === 'AbortError') throw new Error('Le service météo met trop de temps à répondre. Réessaie ou choisis une ville.');
+    if (error?.code === 1) throw new Error('Autorise la localisation dans les réglages, ou choisis une ville manuellement.');
+    if (error?.code === 2 || error?.code === 3) throw new Error('Position introuvable. Réessaie ou choisis une ville manuellement.');
+    if (error?.message?.includes('La localisation n’est pas disponible')) throw error;
+    throw new Error('Météo indisponible. Vérifie la connexion ou choisis une ville manuellement.');
   }
 }
 
