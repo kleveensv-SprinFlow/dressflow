@@ -14,6 +14,43 @@ const SILHOUETTE_SLOTS = [
   { key: 'bag', label: 'Sac & Accessoires', category: 'Accessoires', defaultIcon: '👜', optional: true }
 ];
 
+// Hauteur fixe sur la silhouette, en pixels. La photo ne décide plus de la taille :
+// deux t-shirts font la même hauteur, un pantalon est plus long, des baskets restent petites.
+const GARMENT_HEIGHT = {
+  'Casquette': 58,
+  'Bonnet': 62,
+  'Chapeau': 70,
+  'Bob': 58,
+  'T-shirt': 132,
+  'Top / Blouse': 126,
+  'Chemise': 156,
+  'Pull': 146,
+  'Sweat': 150,
+  'Veste': 176,
+  'Manteau': 210,
+  'Robe': 280,
+  'Pantalon': 196,
+  'Jean': 196,
+  'Jogging': 188,
+  'Legging': 188,
+  'Short': 118,
+  'Jupe': 136,
+  'Baskets': 58,
+  'Ville': 58,
+  'Sandales': 52,
+  'Talons': 64,
+  'Bottes': 92,
+  'Sac': 108
+};
+
+const SLOT_HEIGHT = { head: 64, layer: 176, top: 136, bottom: 196, feet: 58, bag: 108 };
+const TALLEST = 280;
+
+function garmentHeight(item, slot) {
+  if (item?.type && GARMENT_HEIGHT[item.type]) return GARMENT_HEIGHT[item.type];
+  return SLOT_HEIGHT[slot?.key] || 136;
+}
+
 export default function StylistView({
   stylistMode,
   setStylistMode,
@@ -160,7 +197,7 @@ export default function StylistView({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '14px',
+            gap: '4px',
             marginBottom: '1.5rem'
           }}>
             {SILHOUETTE_SLOTS.map(slot => {
@@ -177,8 +214,8 @@ export default function StylistView({
                   key={slot.key}
                   style={{
                     position: 'relative',
-                    width: slot.key === 'head' ? '46%' : slot.key === 'feet' ? '50%' : slot.key === 'bottom' ? '58%' : '66%',
-                    maxWidth: slot.key === 'head' ? '160px' : slot.key === 'feet' ? '180px' : '230px',
+                    width: '72%',
+                    maxWidth: '240px',
                     transition: 'all 0.3s ease'
                   }}
                 >
@@ -196,7 +233,7 @@ export default function StylistView({
                       else if (info.offset.x < -40) stepSlotItem(slot.key, 'next');
                     }}
                     style={{
-                      aspectRatio: slot.key === 'head' ? '1.1' : slot.key === 'bottom' ? '1.05' : '1',
+                      height: item ? garmentHeight(item, slot) : 92,
                       borderRadius: '24px',
                       background: item ? 'rgba(255, 255, 255, 0.7)' : 'rgba(240, 235, 225, 0.5)',
                       border: item ? '1px solid rgba(220, 212, 200, 0.4)' : '1.5px dashed rgba(200, 190, 175, 0.6)',
@@ -217,8 +254,9 @@ export default function StylistView({
                           src={item.image_url}
                           alt={item.type || slot.label}
                           style={{
-                            width: '100%',
                             height: '100%',
+                            width: 'auto',
+                            maxWidth: '100%',
                             objectFit: 'contain',
                             filter: 'drop-shadow(0 8px 16px rgba(45, 38, 35, 0.12))',
                             pointerEvents: 'none'
@@ -444,7 +482,6 @@ export default function StylistView({
                         setActivePickerSlot(null);
                       }}
                       style={{
-                        aspectRatio: '1',
                         borderRadius: '20px',
                         border: isCurrent ? '2px solid var(--primary)' : '1px solid rgba(220, 212, 200, 0.5)',
                         background: isCurrent ? 'rgba(45, 38, 35, 0.04)' : '#faf7f2',
@@ -458,17 +495,20 @@ export default function StylistView({
                       }}
                     >
                       {piece.image_url ? (
-                        <img
-                          src={piece.image_url}
-                          alt={piece.type}
-                          style={{
-                            width: '100%',
-                            height: '75%',
-                            objectFit: 'contain',
-                            filter: 'drop-shadow(0 4px 8px rgba(45, 38, 35, 0.08))'
-                          }}
-                          onError={() => onImageError?.(piece)}
-                        />
+                        <span style={{ height: 96, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <img
+                            src={piece.image_url}
+                            alt={piece.type}
+                            style={{
+                              height: Math.max(34, Math.round((garmentHeight(piece, activePickerSlot) / TALLEST) * 96)),
+                              width: 'auto',
+                              maxWidth: '100%',
+                              objectFit: 'contain',
+                              filter: 'drop-shadow(0 4px 8px rgba(45, 38, 35, 0.08))'
+                            }}
+                            onError={() => onImageError?.(piece)}
+                          />
+                        </span>
                       ) : (
                         <span style={{ fontSize: '2rem' }}>{piece.icon || '👕'}</span>
                       )}
