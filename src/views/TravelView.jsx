@@ -1,11 +1,18 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Plane, Luggage, Loader2, Check } from 'lucide-react';
+import { MapPin, Loader2, Check } from 'lucide-react';
+
+const QUESTIONS = [
+  { key: 'laundry', label: 'Machine à laver' },
+  { key: 'sport', label: 'Sport' },
+  { key: 'evening', label: 'Soirée' }
+];
 
 const TravelView = ({
   travelData,
   setTravelData,
   suitcase,
+  suitcaseNote,
   suitcaseLoading,
   handleGenerateSuitcase,
   suitcaseChecked,
@@ -13,56 +20,118 @@ const TravelView = ({
   setShowCityModal,
   setCityModalMode
 }) => {
-  return (
-    <div className="dashboard-container">
-      <header style={{ marginBottom: '2rem' }}>
-        <h2 className="title" style={{ fontSize: '2.4rem' }}>Prêt à partir ? ✈️</h2>
-      </header>
-      
-      <div className="glass-card" style={{ padding: '1.5rem', borderRadius: '32px', boxShadow: '0 15px 40px rgba(0,0,0,0.08)', marginBottom: '2rem' }}>
-        <div onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.2rem', background: '#f8f9fa', borderRadius: '20px', marginBottom: '1rem', cursor: 'pointer', border: '1px solid rgba(0,0,0,0.05)' }}>
-          <MapPin size={20} color="var(--primary)" />
-          <div style={{ flex: 1 }}><div style={{ fontSize: '0.65rem', fontWeight: 800, opacity: 0.5 }}>DESTINATION</div><div style={{ fontWeight: 800 }}>{travelData.destination || "Où pars-tu ?"}</div></div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 140px', padding: '0.8rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)', minWidth: 0 }}>
-            <div style={{ fontSize: '0.6rem', fontWeight: 800, opacity: 0.5 }}>DÉPART</div>
-            <input type="date" value={travelData.startDate} onChange={(e) => setTravelData({...travelData, startDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.85rem', outline: 'none', color: 'inherit' }} />
-          </div>
-          <div style={{ flex: '1 1 140px', padding: '0.8rem', background: '#f8f9fa', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.05)', minWidth: 0 }}>
-            <div style={{ fontSize: '0.6rem', fontWeight: 800, opacity: 0.5 }}>RETOUR</div>
-            <input type="date" value={travelData.endDate} onChange={(e) => setTravelData({...travelData, endDate: e.target.value})} style={{ background: 'none', border: 'none', fontWeight: 800, width: '100%', fontSize: '0.85rem', outline: 'none', color: 'inherit' }} />
-          </div>
-        </div>
+  const setField = (key, value) => {
+    setTravelData(previous => ({ ...previous, [key]: value }));
+  };
 
-        <motion.button whileTap={{ scale: 0.95 }} className="btn-primary" onClick={handleGenerateSuitcase} disabled={suitcaseLoading} style={{ marginTop: '1.5rem', height: '60px', borderRadius: '20px' }}>
-          {suitcaseLoading ? <Loader2 className="animate-spin" /> : <Plane size={20} />} Générer ma valise ✨
-        </motion.button>
+  return (
+    <div className="dashboard-container" style={{ paddingBottom: '140px' }}>
+      <header style={{ marginBottom: '1.4rem' }}>
+        <h2 className="title" style={{ fontSize: '2.6rem' }}>Voyage</h2>
+        <p className="subtitle" style={{ marginTop: '6px' }}>
+          La valise est calculée avec tes pièces, la météo et ces réponses.
+        </p>
+      </header>
+
+      <button
+        type="button"
+        onClick={() => { setCityModalMode('travel'); setShowCityModal(true); }}
+        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', padding: '0.9rem 0', cursor: 'pointer' }}
+      >
+        <div style={{ fontSize: '0.66rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Destination</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+          <MapPin size={16} />
+          <span>{travelData.destination || 'Choisir une ville'}</span>
+        </div>
+      </button>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '0.8rem' }}>
+        <label>
+          <div style={{ fontSize: '0.66rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Départ</div>
+          <input type="date" value={travelData.startDate} onChange={(e) => setField('startDate', e.target.value)} style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', padding: '0.7rem 0', color: 'inherit', font: 'inherit' }} />
+        </label>
+        <label>
+          <div style={{ fontSize: '0.66rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Retour</div>
+          <input type="date" value={travelData.endDate} onChange={(e) => setField('endDate', e.target.value)} style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', padding: '0.7rem 0', color: 'inherit', font: 'inherit' }} />
+        </label>
       </div>
 
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '1.2rem' }}>
+        {QUESTIONS.map(question => {
+          const on = Boolean(travelData[question.key]);
+          return (
+            <button
+              key={question.key}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setField(question.key, !on)}
+              style={{
+                border: '1px solid ' + (on ? '#161513' : 'var(--border)'),
+                background: on ? '#161513' : 'transparent',
+                color: on ? '#f3f0ea' : '#161513',
+                padding: '0.55rem 0.75rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                fontSize: '0.66rem',
+                cursor: 'pointer'
+              }}
+            >
+              {question.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <motion.button whileTap={{ scale: 0.98 }} className="btn-primary" onClick={handleGenerateSuitcase} disabled={suitcaseLoading} style={{ marginTop: '1.4rem' }}>
+        {suitcaseLoading ? <Loader2 className="animate-spin" size={16} /> : null}
+        <span>{suitcaseLoading ? 'Calcul…' : 'Préparer la valise'}</span>
+      </motion.button>
+
       {suitcase.length > 0 && (
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><Luggage size={22} color="var(--primary)" /><h3 className="title" style={{ margin: 0, fontSize: '1.4rem' }}>Ma Valise</h3></div>
-            <span style={{ fontSize: '0.8rem', fontWeight: 900, color: 'var(--primary)' }}>{Math.round((suitcaseChecked.length / suitcase.length) * 100)}% prêt</span>
+        <section style={{ marginTop: '1.8rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
+            <h3 className="title" style={{ margin: 0, fontSize: '1.8rem' }}>Valise</h3>
+            <span className="subtitle" style={{ margin: 0 }}>{Math.round((suitcaseChecked.length / suitcase.length) * 100)} %</span>
           </div>
-          <div className="progress-container"><div className="progress-bar-fill" style={{ width: `${(suitcaseChecked.length / suitcase.length) * 100}%` }}></div></div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem', marginTop: '1.5rem' }}>
+          {suitcaseNote && <p className="subtitle" style={{ marginTop: '4px' }}>{suitcaseNote}</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.6rem' }}>
             {suitcase.map((pack) => {
               const packedId = String(pack.id);
               const isChecked = suitcaseChecked.includes(packedId);
               return (
-                <motion.div key={packedId} whileTap={{ scale: 0.98 }} className={`glass-card suitcase-item ${isChecked ? 'checked' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', cursor: 'pointer' }} onClick={() => onTogglePacked(packedId)}>
-                  <div style={{ fontSize: '2rem' }}>{pack.icon}</div>
-                  <div style={{ flex: 1 }}><div style={{ fontSize: '0.7rem', fontWeight: 800, opacity: 0.5 }}>{pack.category.toUpperCase()}</div><div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{pack.type}</div></div>
-                  <div style={{ background: isChecked ? '#10b981' : 'var(--primary)', color: 'white', padding: '6px 14px', borderRadius: '12px', fontWeight: 900 }}>{isChecked ? <Check size={16} /> : `x${pack.qty}`}</div>
-                </motion.div>
-              )
+                <button
+                  key={packedId}
+                  type="button"
+                  onClick={() => onTogglePacked(packedId)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid var(--border)',
+                    padding: '0.75rem 0',
+                    cursor: 'pointer',
+                    opacity: isChecked ? 0.45 : 1
+                  }}
+                >
+                  <div style={{ width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
+                    {pack.image_url
+                      ? <img src={pack.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      : <span>{pack.icon}</span>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.62rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{pack.category}</div>
+                    <div>{pack.type}{pack.color ? ` · ${pack.color}` : ''}</div>
+                  </div>
+                  {isChecked && <Check size={16} />}
+                </button>
+              );
             })}
           </div>
-        </motion.div>
+        </section>
       )}
     </div>
   );

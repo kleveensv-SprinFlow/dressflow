@@ -33,6 +33,27 @@ test('prefers a never-worn piece over one worn today', () => {
   assert.equal(list[0].id, 'fresh');
 });
 
+test('laundry packs fewer tops than a trip without a machine', () => {
+  const many = [
+    ...Array.from({ length: 8 }, (_, index) => ({ id: `t${index}`, type: 'T-shirt', main_category: 'Haut' })),
+    { id: 'b1', type: 'Jean', main_category: 'Bas' },
+    { id: 'b2', type: 'Pantalon', main_category: 'Bas' },
+    { id: 'b3', type: 'Jogging', main_category: 'Bas' }
+  ];
+  const tops = (list) => list.filter(item => item.category === 'Haut').length;
+  const full = generatePackingList(many, { temp: 18, code: 0 }, 8, { laundry: false });
+  const washed = generatePackingList(many, { temp: 18, code: 0 }, 8, { laundry: true });
+  assert.ok(tops(washed) < tops(full));
+});
+
+test('sport keeps a training bottom when one exists', () => {
+  const list = generatePackingList([
+    { id: 't', type: 'T-shirt', main_category: 'Haut' },
+    { id: 'jean', type: 'Jean', main_category: 'Bas' },
+    { id: 'jog', type: 'Jogging', main_category: 'Bas' }
+  ], { temp: 18, code: 0 }, 3, { sport: true });
+  assert.ok(list.some(item => item.id === 'jog'));
+});
 test('rejects invalid trip duration and empty wardrobes', () => {
   assert.deepEqual(generatePackingList(items, { temp: 20 }, 0), []);
   assert.deepEqual(generatePackingList([], { temp: 20 }, 3), []);

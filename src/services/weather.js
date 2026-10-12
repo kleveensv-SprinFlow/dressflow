@@ -35,6 +35,28 @@ export const getLocalWeather = async (lat = null, lon = null) => {
   }
 }
 
+export const getTripWeather = async (lat, lon, startDate, endDate) => {
+  const response = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&start_date=${startDate}&end_date=${endDate}`
+  );
+  if (!response.ok) throw new Error('Le service météo ne répond pas.');
+  const data = await response.json();
+  const maxes = data?.daily?.temperature_2m_max || [];
+  const mins = data?.daily?.temperature_2m_min || [];
+  const codes = data?.daily?.weathercode || [];
+  if (!maxes.length || !mins.length) throw new Error('Les données météo sont indisponibles.');
+  const pairs = maxes.map((max, index) => (Number(max) + Number(mins[index] ?? max)) / 2);
+  const temp = Math.round(pairs.reduce((sum, value) => sum + value, 0) / pairs.length);
+  const code = codes.find(value => [51, 53, 55, 61, 63, 65, 80, 81, 82, 95].includes(Number(value))) ?? codes[0] ?? 0;
+  return {
+    temp,
+    code: Number(code),
+    description: getWeatherDescription(Number(code)),
+    lat,
+    lon
+  };
+};
+
 export const searchCity = async (query) => {
   try {
     const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=fr&format=json`)

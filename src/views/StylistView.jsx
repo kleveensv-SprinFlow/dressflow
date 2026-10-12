@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   RefreshCw, Check, Sparkles, X, Pin
@@ -71,6 +71,14 @@ export default function StylistView({
 }) {
   // Modal / Tiroir de sélection rapide pour une pièce
   const [activePickerSlot, setActivePickerSlot] = useState(null);
+  const asked = useRef(false);
+  const hasClothes = (manualItems?.top?.length || 0) + (manualItems?.bottom?.length || 0) > 0;
+
+  useEffect(() => {
+    if (asked.current || currentOutfit || outfitLoading || !hasClothes) return;
+    asked.current = true;
+    handleGenerateOutfitRequest();
+  }, [currentOutfit, outfitLoading, hasClothes, handleGenerateOutfitRequest]);
 
   // Pool de pièces disponibles pour un slot donné
   const getSlotPool = (slotKey) => {
@@ -156,7 +164,7 @@ export default function StylistView({
       <header style={{ marginBottom: '1.2rem', textAlign: 'center' }}>
         <h1 className="title" style={{ fontSize: '2.6rem' }}>Habille-moi</h1>
         <p className="subtitle" style={{ fontSize: '0.86rem', marginTop: '6px' }}>
-          Glisse une rangée. Épingle pour garder.
+          Une tenue est composée avec tes pièces. Glisse pour changer, épingle pour garder.
         </p>
       </header>
 
@@ -165,6 +173,16 @@ export default function StylistView({
           <SlotMachine />
           <h2 className="title" style={{ marginTop: '1.5rem', fontSize: '1.3rem' }}>Harmonisation de la silhouette…</h2>
           <p className="subtitle" style={{ fontSize: '0.85rem' }}>Sélection des pièces et accords des couleurs.</p>
+        </div>
+      ) : !hasClothes ? (
+        <p className="subtitle" style={{ textAlign: 'center', marginTop: '2rem' }}>
+          Ajoute d’abord un haut et un bas dans Dressing.
+        </p>
+      ) : !currentOutfit ? (
+        <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+          <button type="button" className="btn-primary" onClick={handleGenerateOutfitRequest}>
+            Composer une tenue
+          </button>
         </div>
       ) : (
         <>

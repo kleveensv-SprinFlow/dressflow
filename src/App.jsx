@@ -16,7 +16,7 @@ import { supabase } from './lib/supabase'
 import { detectDominantColor } from './services/colorDetector'
 import { removeBackground } from './services/backgroundRemover'
 import { generateOutfit } from './services/styleEngine.js'
-import { getLocalWeather, searchCity } from './services/weather'
+import { getLocalWeather, searchCity, getTripWeather } from './services/weather'
 
 // Components & Views
 import { RotatingClothes } from './components/UIElements'
@@ -29,7 +29,7 @@ import SettingsView from './views/SettingsView'
 import AddClothingView from './views/AddClothingView'
 
 // Utils
-import { generatePackingList } from './utils/packing'
+import { generatePackingList, describePacking } from './utils/packing'
 import { 
   MAIN_CATEGORIES, CATEGORY_HIERARCHY, getIconForType, 
   ALL_SEASONS, ALL_ACTIVITIES, ALL_COLORS, currentSeason, formatUID, findItemById 
@@ -77,9 +77,13 @@ function App() {
   const [travelData, setTravelData] = useState({ 
     destination: '', lat: null, lon: null, 
     startDate: format(new Date(), 'yyyy-MM-dd'), 
-    endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd') 
+    endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
+    laundry: false,
+    sport: false,
+    evening: false
   })
   const [suitcase, setSuitcase] = useState([])
+  const [suitcaseNote, setSuitcaseNote] = useState('')
   const [suitcaseLoading, setSuitcaseLoading] = useState(false)
   
   const [stylistMode, setStylistMode] = useState('ai') 
@@ -415,12 +419,19 @@ function App() {
     }
     setSuitcaseLoading(true);
     try {
-      const destWeather = await getLocalWeather(travelData.lat, travelData.lon);
       const duration = differenceInDays(endDate, startDate) + 1;
-      const list = generatePackingList(items, destWeather, duration);
+      const trip = { laundry: !!travelData.laundry, sport: !!travelData.sport, evening: !!travelData.evening };
+      let destWeather = { temp: 18, code: 0, description: 'Météo estimée' };
+      try {
+        destWeather = await getTripWeather(travelData.lat, travelData.lon, travelData.startDate, travelData.endDate);
+      } catch {
+        try { destWeather = await getLocalWeather(travelData.lat, travelData.lon); } catch { /* on part sur 18° */ }
+      }
+      const list = generatePackingList(items, destWeather, duration, trip);
       if (list.length === 0) throw new Error("Aucune pièce exploitable n’a été trouvée dans ton dressing.");
       setSuitcase(list);
       setSuitcaseChecked([]);
+      setSuitcaseNote(describePacking(destWeather, duration, trip));
       persistTrip({ suitcase: list, checked: [] });
       toast.success("Valise prête.");
     } catch (err) {
@@ -1127,7 +1138,7 @@ function App() {
               onImageError={handleImageError} 
             />
           )}
-          {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={updateTravelData} suitcase={suitcase} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} onTogglePacked={toggleSuitcaseItem} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
+          {view === 'trip' && <TravelView key="trip" travelData={travelData} setTravelData={updateTravelData} suitcase={suitcase} suitcaseNote={suitcaseNote} suitcaseLoading={suitcaseLoading} handleGenerateSuitcase={handleGenerateSuitcase} suitcaseChecked={suitcaseChecked} onTogglePacked={toggleSuitcaseItem} setShowCityModal={setShowCityModal} setCityModalMode={setCityModalMode} />}
           {view === 'settings' && <SettingsView key="settings" profile={{id: uid, name, email, avatar_url: avatarUrl}} name={name} setName={setName} email={email} setEmail={setEmail} avatarPreview={avatarPreview} avatarInputRef={avatarInputRef} setTempAvatarFile={setTempAvatarFile} setAvatarPreview={setAvatarPreview} handleUpdateProfile={handleUpdateProfile} handleLogout={handleLogout} setShowDeleteModal={setShowDeleteModal} items={items} />}
           {['add-choice', 'bulk-add', 'add-detail'].includes(view) && (
             <AddClothingView 
