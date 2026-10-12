@@ -80,7 +80,7 @@ function fileToImage(file) {
 
 async function ensureSession(file) {
   const cached = sessions.get(file)
-  if (cached) return cached
+  if (cached?.labels) return cached
   const img = await fileToImage(file)
   const width = img.naturalWidth || img.width
   const height = img.naturalHeight || img.height
@@ -93,6 +93,8 @@ async function ensureSession(file) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
   ctx.drawImage(img, 0, 0, workW, workH)
   const photo = ctx.getImageData(0, 0, workW, workH)
+  // La photo est gardée tout de suite : si le modèle échoue, l’éditeur peut quand même l’afficher.
+  sessions.set(file, { photo: photo.data, workW, workH })
   const model = drawModelInput(img, width, height)
   const seg = await segmentSquare(model.image, model.crop, () => {})
   const session = {
@@ -262,11 +264,11 @@ export const removeBackground = async (file, mainCategory) => {
 /** Pixels d’origine + découpe courante, pour corriger au doigt. */
 export function readEdit(file) {
   const session = sessions.get(file)
-  if (!session?.rgba) return null
+  if (!session) return null
   return {
     width: session.workW,
     height: session.workH,
-    rgba: session.rgba,
+    rgba: session.rgba || session.photo,
     photo: session.photo
   }
 }

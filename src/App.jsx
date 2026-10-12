@@ -701,6 +701,7 @@ function App() {
       if (seq !== cutoutSeq.current) return false
       if (!removed) {
         if (mainCategory) toast.error("Cette pièce n’est pas visible sur la photo.")
+        else toast.error("Détourage impossible. Corrige à la main avec le pinceau.")
         return false
       }
       setCutoutFile(processed)

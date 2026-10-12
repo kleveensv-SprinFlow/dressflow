@@ -71,7 +71,6 @@ function maskFromOutput(tensor, width, height) {
   return { data: out, width, height };
 }
 async function inferMatte(image) {
-  let matter = await getMatter("fp16");
   const rgb = toRgb(image);
   const run = async (current) => {
     const { pixel_values } = await current.processor(rgb);
@@ -79,12 +78,11 @@ async function inferMatte(image) {
     return maskFromOutput(out.output_image, image.width, image.height);
   };
   try {
-    return await run(matter);
-  } catch (error) {
-    if (matter.dtype === "fp32") throw error;
+    return await run(await getMatter("fp16"));
+  } catch (fp16Error) {
+    console.warn("BiRefNet fp16 indisponible, repli fp32:", fp16Error);
     matterPromise = null;
-    matter = await getMatter("fp32");
-    return run(matter);
+    return run(await getMatter("fp32"));
   }
 }
 function cropGray(mask, sideW, sideH, ox, oy, sw, sh) {
@@ -141,21 +139,29 @@ scope.onmessage = async (event) => {
       postProgress("segment");
       const mask = await inferMatte(image);
       matte = cropGray(mask, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
-    } catch {
+    } catch (matteError) {
+      console.warn("BiRefNet a \xE9chou\xE9:", matteError);
       matte = null;
     }
     postProgress("segment");
-    const segmenter = await getSegmenter();
-    const output = await segmenter(image);
-    const mapped = classMap(
-      output,
-      message.width,
-      message.height,
-      message.ox,
-      message.oy,
-      message.sw,
-      message.sh
-    );
+    let mapped;
+    try {
+      const segmenter = await getSegmenter();
+      const output = await segmenter(image);
+      mapped = classMap(
+        output,
+        message.width,
+        message.height,
+        message.ox,
+        message.oy,
+        message.sw,
+        message.sh
+      );
+    } catch (segError) {
+      console.warn("SegFormer a \xE9chou\xE9:", segError);
+      if (!matte) throw segError;
+      mapped = { classIds: new Uint8Array(message.sw * message.sh), labels: ["Background"] };
+    }
     const buffer = mapped.classIds.buffer.slice(0);
     const matteBuffer = matte ? matte.buffer.slice(0) : null;
     const transfer = matteBuffer ? [buffer, matteBuffer] : [buffer];
