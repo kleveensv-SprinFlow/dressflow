@@ -697,11 +697,12 @@ function App() {
     const seq = ++cutoutSeq.current
     setIsProcessingCutout(true)
     try {
-      const { file: processed, removed, main_category, type, pattern } = await removeBackground(file, mainCategory)
+      const { file: processed, removed, main_category, type, pattern, reason } = await removeBackground(file, mainCategory)
       if (seq !== cutoutSeq.current) return false
       if (!removed) {
-        if (mainCategory) toast.error("Cette pièce n’est pas visible sur la photo.")
-        else toast.error("Détourage impossible. Corrige à la main avec le pinceau.")
+        const why = String(reason || '').slice(0, 300)
+        if (why === 'Aucun vêtement de cette catégorie') toast.error("Cette pièce n’est pas visible sur la photo.")
+        else toast.error(`Détourage impossible : ${why || 'erreur inconnue'}`, { duration: 15000 })
         return false
       }
       setCutoutFile(processed)

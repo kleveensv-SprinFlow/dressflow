@@ -6,6 +6,7 @@ if (env.backends?.onnx?.wasm) {
 }
 let segmenterPromise = null;
 let matterPromise = null;
+let matterDtype = null;
 const MATTE_ID = "onnx-community/BiRefNet_lite-ONNX";
 const scope = self;
 function postProgress(status, progress) {
@@ -28,6 +29,7 @@ function getSegmenter() {
 }
 function getMatter(dtype) {
   if (!matterPromise) {
+    matterDtype = dtype;
     const progress_callback = (update) => {
       postProgress(update.status ?? "download", update.progress);
     };
@@ -72,18 +74,30 @@ function maskFromOutput(tensor, width, height) {
 }
 async function inferMatte(image) {
   const rgb = toRgb(image);
-  const run = async (current) => {
+  const run = async (current, side) => {
+    if (side && current.processor?.image_processor) {
+      current.processor.image_processor.size = { width: side, height: side };
+    }
     const { pixel_values } = await current.processor(rgb);
     const out = await current.model({ input_image: pixel_values });
     return maskFromOutput(out.output_image, image.width, image.height);
   };
-  try {
-    return await run(await getMatter("fp16"));
-  } catch (fp16Error) {
-    console.warn("BiRefNet fp16 indisponible, repli fp32:", fp16Error);
-    matterPromise = null;
-    return run(await getMatter("fp32"));
+  const errors = [];
+  const attempts = [
+    ["fp16", 0],
+    ["fp32", 0],
+    ["fp32", 512]
+  ];
+  for (const [dtype, side] of attempts) {
+    try {
+      if (matterPromise && matterDtype !== dtype) matterPromise = null;
+      return await run(await getMatter(dtype), side);
+    } catch (error) {
+      console.warn(`BiRefNet ${dtype}${side ? "@" + side : ""} a \xE9chou\xE9:`, error);
+      errors.push(`${dtype}${side ? "@" + side : ""}: ${error?.message ?? error}`);
+    }
   }
+  throw new Error(errors.join(" | "));
 }
 function cropGray(mask, sideW, sideH, ox, oy, sw, sh) {
   const cropped = new Uint8Array(sw * sh);
@@ -135,12 +149,14 @@ scope.onmessage = async (event) => {
     const pixels = new Uint8ClampedArray(message.buffer);
     const image = new RawImage(pixels, message.width, message.height, 4);
     let matte = null;
+    let matteFailure = "";
     try {
       postProgress("segment");
       const mask = await inferMatte(image);
       matte = cropGray(mask, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
     } catch (matteError) {
       console.warn("BiRefNet a \xE9chou\xE9:", matteError);
+      matteFailure = matteError?.message ?? String(matteError);
       matte = null;
     }
     postProgress("segment");
@@ -159,7 +175,7 @@ scope.onmessage = async (event) => {
       );
     } catch (segError) {
       console.warn("SegFormer a \xE9chou\xE9:", segError);
-      if (!matte) throw segError;
+      if (!matte) throw new Error(`BiRefNet: ${matteFailure || "?"} // SegFormer: ${segError?.message ?? segError}`);
       mapped = { classIds: new Uint8Array(message.sw * message.sh), labels: ["Background"] };
     }
     const buffer = mapped.classIds.buffer.slice(0);
