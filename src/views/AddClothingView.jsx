@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Camera, Image as ImageIcon, Loader2, Layers, Tag, Palette, Sun, Briefcase, Check, Sparkles, Eraser, Paintbrush } from 'lucide-react';
 import { ChoiceSelector, SearchSelector, ColorPalette } from '../components/UIElements';
 import CutoutBrush from '../components/CutoutBrush';
+import LassoSelect from '../components/LassoSelect';
 import { MAIN_CATEGORIES, CATEGORY_HIERARCHY, ALL_SEASONS, ALL_ACTIVITIES, ALL_PATTERNS, getSeasonIcon, getActivityIcon } from '../utils/helpers.jsx';
 
 function toolStyle(active) {
@@ -42,7 +43,13 @@ const AddClothingView = ({
   onCategoryCutout,
   onBulkCategory,
   originalFile,
-  onBrushCommit
+  originalImage,
+  onBrushCommit,
+  lassoMode,
+  onLasso,
+  onAutoCutout,
+  onSkipLasso,
+  onRelasso
 }) => {
   const [fixing, setFixing] = useState(false)
   const [tool, setTool] = useState('restore')
@@ -218,6 +225,8 @@ const AddClothingView = ({
               <Loader2 className="animate-spin" size={36} color="var(--primary)" />
               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>Détourage en cours…</span>
             </div>
+          ) : lassoMode && (originalImage || selectedImage) ? (
+            <LassoSelect imageUrl={originalImage || selectedImage} onDone={onLasso} />
           ) : fixing && originalFile ? (
             <CutoutBrush sourceFile={originalFile} tool={tool} radius={brush} onCommit={onBrushCommit} />
           ) : (
@@ -235,7 +244,18 @@ const AddClothingView = ({
           )}
         </div>
 
-        {!isProcessingCutout && originalFile && (
+        {!isProcessingCutout && lassoMode && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '1.2rem' }}>
+            <button type="button" onClick={onAutoCutout} style={toolStyle(false)}>
+              <Sparkles size={14} /> Tout détourer automatiquement
+            </button>
+            <button type="button" onClick={onSkipLasso} style={toolStyle(false)}>
+              Garder la photo
+            </button>
+          </div>
+        )}
+
+        {!isProcessingCutout && !lassoMode && originalFile && (
           <div style={{ marginBottom: '1.2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <button
@@ -255,6 +275,11 @@ const AddClothingView = ({
               >
                 {fixing ? 'Terminer' : 'Corriger'}
               </button>
+              {!fixing && onRelasso && (
+                <button type="button" onClick={onRelasso} style={toolStyle(false)}>
+                  Entourer à nouveau
+                </button>
+              )}
               {fixing && (
                 <>
                   <button type="button" onClick={() => setTool('restore')} style={toolStyle(tool === 'restore')}>

@@ -75,7 +75,7 @@ async function segmentSquare(image, crop, progress) {
   if (!classIds) classIds = new Uint8Array(width * height);
   return { classIds, matte, width, height, labels };
 }
-const MODEL_SIDE = 640;
+const MODEL_SIDE = 768;
 function drawModelInput(source, width, height) {
   const scale = Math.min(1, MODEL_SIDE / Math.max(width, height));
   const sw = Math.max(1, Math.round(width * scale));
