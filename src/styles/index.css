@@ -1345,6 +1345,7 @@ body {
   inset: 0;
   background: #161513;
   z-index: 0;
+  pointer-events: none;
 }
 
 .nav-label {

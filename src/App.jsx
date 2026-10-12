@@ -1023,7 +1023,7 @@ function App() {
       />
       <div className="bg-blobs"><div className="blob blob-1"></div><div className="blob blob-2"></div></div>
       <div className="app-container">
-        <AnimatePresence mode="wait">
+        <AnimatePresence initial={false}>
           
           {view === 'splash' && (
             <motion.div key="splash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
