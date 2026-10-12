@@ -1,41 +1,30 @@
 :root {
-  --font-main: 'Poppins', sans-serif;
-  
-  /* Shared tokens */
-  --radius-xl: 40px;
-  --radius-lg: 32px;
-  --radius-md: 20px;
-  
-  /* Theme Boutique Lin & Nude feutré */
-  --primary: #2d2623;
-  --secondary: #e8dfd2;
-  --primary-glow: rgba(45, 38, 35, 0.12);
-  --primary-rgb: 45, 38, 35;
-  --bg-gradient: radial-gradient(circle at top left, #fdfbf7, #f7f3eb);
-  --text-main: #2b2523;
-  --text-muted: #827871;
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(220, 210, 198, 0.45);
+  --font-main: 'Outfit', sans-serif;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --radius-xl: 2px;
+  --radius-lg: 2px;
+  --radius-md: 2px;
+  --primary: #161513;
+  --secondary: #e7e1d8;
+  --primary-glow: transparent;
+  --primary-rgb: 22, 21, 19;
+  --bg-gradient: #f3f0ea;
+  --text-main: #161513;
+  --text-muted: #8a847c;
+  --glass-bg: transparent;
+  --glass-border: #e3ddd4;
+  --accent: #8c734b;
 }
 
-[data-theme='male'] {
-  --primary: #242220;
-  --secondary: #e2dbce;
-  --primary-glow: rgba(36, 34, 32, 0.12);
-  --primary-rgb: 36, 34, 32;
-  --bg-gradient: radial-gradient(circle at top left, #faf8f3, #f3efe6);
-  --text-main: #242220;
-  --text-muted: #797672;
-}
-
+[data-theme='male'],
 [data-theme='neutral'] {
-  --primary: #383431;
-  --secondary: #ded7cb;
-  --primary-glow: rgba(56, 52, 49, 0.12);
-  --primary-rgb: 56, 52, 49;
-  --bg-gradient: radial-gradient(circle at top left, #faf8f5, #f4efe7);
-  --text-main: #252220;
-  --text-muted: #736e68;
+  --primary: #161513;
+  --secondary: #e7e1d8;
+  --primary-glow: transparent;
+  --primary-rgb: 22, 21, 19;
+  --bg-gradient: #f3f0ea;
+  --text-main: #161513;
+  --text-muted: #8a847c;
 }
 
 * {
@@ -1232,4 +1221,167 @@ body {
   align-items: center;
   justify-content: center;
   border: 2px solid white;
+}
+
+body {
+  background: #f3f0ea;
+  font-weight: 400;
+}
+
+.bg-blobs,
+.blob {
+  display: none;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.btn-primary,
+.btn-secondary,
+.glass-card,
+.item-card,
+.upload-card,
+.choice-item,
+.input-styled,
+.gender-btn {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.btn-primary {
+  background: #161513;
+  color: #f3f0ea;
+  padding: 1.15rem 1rem;
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid #e3ddd4;
+  color: #161513;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.glass-card {
+  background: transparent;
+  backdrop-filter: none;
+  border: 1px solid #e3ddd4;
+}
+
+.item-card {
+  background: transparent;
+  border: none;
+}
+
+.item-image {
+  background: transparent;
+  padding: 8px 8px 0;
+}
+
+.item-image img {
+  filter: none;
+}
+
+.item-info {
+  background: transparent;
+  padding: 0.55rem 0.15rem 0.15rem;
+}
+
+.item-type {
+  font-weight: 500;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.item-meta {
+  font-size: 0.72rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+}
+
+.bottom-nav {
+  height: 62px;
+  background: #f3f0ea;
+  backdrop-filter: none;
+  border-top: 1px solid #e3ddd4;
+}
+
+.nav-item {
+  color: #8a847c;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  min-height: 44px;
+}
+
+.nav-item.active {
+  color: #161513;
+  box-shadow: inset 0 -1px 0 #161513;
+}
+
+.add-nav-btn {
+  display: none;
+}
+
+.filter-pill {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.35rem 0;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8a847c;
+}
+
+.filter-pill.active {
+  background: transparent;
+  color: #161513;
+  border-bottom: 1px solid #161513;
+}
+
+.filter-bar {
+  gap: 1.1rem;
+}
+
+.choice-item {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  box-shadow: none;
+}
+
+.choice-item.active {
+  background: transparent;
+  color: #161513;
+  border-bottom-color: #161513;
+  box-shadow: none;
+  transform: none;
+}
+
+.upload-card {
+  background: transparent;
+  border: 1px solid #e3ddd4;
+  backdrop-filter: none;
+  border-radius: 0;
+}
+
+.input-styled {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #e3ddd4;
+  border-radius: 0;
 }

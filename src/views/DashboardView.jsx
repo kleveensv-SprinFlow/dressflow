@@ -33,13 +33,13 @@ const DashboardView = ({
       {/* 1. HEADER ACCUEIL HUMAIN */}
       <header className="dashboard-header">
         <div>
-          <h1 className="title" style={{ fontSize: '1.75rem', letterSpacing: '-0.5px' }}>
-            {name ? `Bonjour, ${name} 👋` : 'Mon Dressing ✨'}
+          <h1 className="title" style={{ fontSize: '2.6rem' }}>
+            {name || 'Dressing'}
           </h1>
-          <p className="subtitle" style={{ fontSize: '0.88rem', marginTop: '2px' }}>
+          <p className="subtitle" style={{ fontSize: '0.88rem', marginTop: '6px' }}>
             {items.length === 0
-              ? 'Prêt(e) à composer ta garde-robe ?'
-              : `${items.length} pièce${items.length > 1 ? 's' : ''} dans ton dressing`}
+              ? 'La garde-robe est vide.'
+              : `${items.length} pièce${items.length > 1 ? 's' : ''}`}
           </p>
         </div>
         {weather?.city && (

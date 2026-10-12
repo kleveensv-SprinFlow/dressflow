@@ -154,29 +154,11 @@ export default function StylistView({
     <div className="dashboard-container" style={{ paddingBottom: '130px' }}>
       {/* Header boutique feutré */}
       <header style={{ marginBottom: '1.2rem', textAlign: 'center' }}>
-        <h1 className="title" style={{ fontSize: '1.85rem', letterSpacing: '-0.5px' }}>Habille-moi</h1>
-        <p className="subtitle" style={{ fontSize: '0.86rem', marginTop: '4px' }}>
-          Glisse une rangée pour changer la pièce. Épingle pour la garder.
+        <h1 className="title" style={{ fontSize: '2.6rem' }}>Habille-moi</h1>
+        <p className="subtitle" style={{ fontSize: '0.86rem', marginTop: '6px' }}>
+          Glisse une rangée. Épingle pour garder.
         </p>
       </header>
-
-      {/* Bouton composer / régénérer au-dessus */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.2rem' }}>
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          className="btn-primary"
-          style={{ flex: 1, padding: '0.9rem', fontSize: '0.9rem', borderRadius: '18px' }}
-          onClick={handleGenerateOutfitRequest}
-          disabled={outfitLoading}
-        >
-          {outfitLoading ? (
-            <RefreshCw size={17} className="animate-spin" />
-          ) : (
-            <Sparkles size={17} />
-          )}
-          <span>{currentOutfit ? 'Autre suggestion IA' : 'Composer une tenue'}</span>
-        </motion.button>
-      </div>
 
       {outfitLoading ? (
         <div style={{ padding: '3.5rem 0', textAlign: 'center' }}>
@@ -287,8 +269,8 @@ export default function StylistView({
                         height: 26,
                         border: 'none',
                         borderRadius: '50%',
-                        background: locked ? '#d6ff4a' : 'transparent',
-                        color: '#1c1917',
+                        background: locked ? 'var(--accent)' : 'transparent',
+                        color: locked ? '#f3f0ea' : '#8a847c',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -296,7 +278,7 @@ export default function StylistView({
                         zIndex: 2
                       }}
                     >
-                      <Pin size={14} fill={locked ? '#1c1917' : 'none'} />
+                      <Pin size={14} fill={locked ? '#f3f0ea' : 'none'} />
                     </button>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-start', paddingLeft: 10, minWidth: 0 }}>
@@ -308,16 +290,32 @@ export default function StylistView({
           </div>
 
           {/* Bouton de validation du look */}
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handleGenerateOutfitRequest}
+              disabled={outfitLoading}
+              style={{
+                border: 'none',
+                background: 'none',
+                color: 'var(--text-muted)',
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                fontSize: '0.68rem',
+                fontWeight: 500,
+                cursor: 'pointer'
+              }}
+            >
+              {currentOutfit ? 'Autre tenue' : 'Composer une tenue'}
+            </button>
             <motion.button
               whileTap={{ scale: 0.98 }}
               className="btn-primary"
-              style={{ flex: 1, padding: '1.1rem', fontSize: '1rem', borderRadius: '20px' }}
+              style={{ width: '100%', borderRadius: 0 }}
               onClick={handleValidateOutfit}
               disabled={loading}
             >
-              <Check size={19} />
-              <span>Je porte cette tenue aujourd’hui</span>
+              <span>Je porte cette tenue</span>
             </motion.button>
           </div>
         </>

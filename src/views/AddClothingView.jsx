@@ -55,47 +55,17 @@ const AddClothingView = ({
     return (
       <motion.div key="add-choice" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="dashboard-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', gap: '1.5rem' }}>
         <header style={{ textAlign: 'center' }}>
-          <h2 className="title" style={{ fontSize: '1.9rem', letterSpacing: '-0.5px' }}>Ajouter une pièce</h2>
-          <p className="subtitle" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Seul le vêtement reste, sur un fond transparent</p>
+          <h2 className="title" style={{ fontSize: '2.6rem' }}>Ajouter</h2>
+          <p className="subtitle" style={{ fontSize: '0.9rem', marginTop: '6px' }}>Seul le vêtement reste.</p>
         </header>
-
-        {/* CONSEIL PHOTO FAÇON BOUTIQUE */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(220, 212, 200, 0.5)',
-          borderRadius: '20px',
-          padding: '1rem 1.1rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          boxShadow: '0 4px 15px rgba(45, 38, 35, 0.03)'
-        }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '14px',
-            background: 'rgba(45, 38, 35, 0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.2rem',
-            flexShrink: 0
-          }}>
-            ✨
-          </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.45 }}>
-            <strong>Conseil dressing :</strong> Pose ton vêtement à plat ou porte-le. Seule la pièce sera conservée pour rejoindre ta penderie.
-          </div>
-        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
           <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed var(--primary)', cursor: 'pointer', background: 'white' }}>
-            <div style={{ background: 'var(--primary)', color: 'white', padding: '18px', borderRadius: '22px' }}><Camera size={32} /></div>
+            <div style={{ border: '1px solid var(--primary)', color: 'var(--primary)', padding: '18px' }}><Camera size={28} /></div>
             <div style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--primary)', marginTop: '8px' }}>PHOTO</div>
           </motion.button>
           <motion.button type="button" whileTap={{ scale: 0.98 }} className="upload-card" onClick={() => galleryInputRef.current?.click()} style={{ cursor: 'pointer', background: 'white' }}>
-            <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', padding: '18px', borderRadius: '22px' }}><ImageIcon size={32} /></div>
+            <div style={{ border: '1px solid var(--border)', color: 'var(--primary)', padding: '18px' }}><ImageIcon size={28} /></div>
             <div style={{ fontWeight: 800, fontSize: '0.85rem', opacity: 0.7, marginTop: '8px' }}>GALERIE</div>
           </motion.button>
           <input type="file" ref={fileInputRef} hidden accept="image/*" capture="environment" onChange={handleFileChange} />

@@ -1,49 +1,34 @@
 :root {
-  --font-main: 'Poppins', sans-serif;
-  
-  /* Default / Shared */
-  --radius-lg: 24px;
-  --radius-md: 16px;
-  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  --shadow-strong: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-  
-  /* Theme Female & Boutique (Warm Linen / Rose poudré feutré) */
-  --bg: #faf7f2;
-  --surface: #ffffff;
-  --primary: #2d2623;
-  --primary-dark: #1b1715;
-  --primary-rgb: 45, 38, 35;
-  --secondary: #f3ede2;
-  --accent: #8b7355;
-  --text-main: #2b2523;
-  --text-muted: #827871;
-  --border: #ede6da;
+  --font-main: 'Outfit', sans-serif;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --radius-lg: 2px;
+  --radius-md: 2px;
+  --shadow: none;
+  --shadow-strong: none;
+  --bg: #f3f0ea;
+  --surface: #f3f0ea;
+  --primary: #161513;
+  --primary-dark: #161513;
+  --primary-rgb: 22, 21, 19;
+  --secondary: #e7e1d8;
+  --accent: #8c734b;
+  --text-main: #161513;
+  --text-muted: #8a847c;
+  --border: #e3ddd4;
 }
 
-[data-theme='male'] {
-  --bg: #f8f6f0;
-  --surface: #ffffff;
-  --primary: #2b2b2b;
-  --primary-dark: #1a1a1a;
-  --primary-rgb: 43, 43, 43;
-  --secondary: #ede9df;
-  --accent: #6b7a6e;
-  --text-main: #242220;
-  --text-muted: #797672;
-  --border: #e4dfd5;
-}
-
+[data-theme='male'],
 [data-theme='neutral'] {
-  --bg: #f7f5f0;
-  --surface: #ffffff;
-  --primary: #383431;
-  --primary-dark: #23201e;
-  --primary-rgb: 56, 52, 49;
-  --secondary: #eae5dc;
-  --accent: #78736d;
-  --text-main: #252220;
-  --text-muted: #736e68;
-  --border: #e0dbd0;
+  --bg: #f3f0ea;
+  --surface: #f3f0ea;
+  --primary: #161513;
+  --primary-dark: #161513;
+  --primary-rgb: 22, 21, 19;
+  --secondary: #e7e1d8;
+  --accent: #8c734b;
+  --text-main: #161513;
+  --text-muted: #8a847c;
+  --border: #e3ddd4;
 }
 
 * {
@@ -161,16 +146,20 @@ body {
 }
 
 .title {
-  font-size: 2rem;
-  font-weight: 700;
+  font-family: var(--font-serif);
+  font-size: 2.4rem;
+  font-weight: 500;
   margin: 0;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
+  line-height: 1;
 }
 
 .subtitle {
   color: var(--text-muted);
-  font-size: 1rem;
+  font-size: 0.92rem;
+  font-weight: 300;
   margin-top: 0.5rem;
+  letter-spacing: 0.02em;
 }
 
 .gender-toggle {
