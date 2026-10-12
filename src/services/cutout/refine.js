@@ -510,93 +510,78 @@ function alphaFromBinary(bin, guide, w, h, softness) {
   for (let i = 0; i < bin.length; i++) alpha[i] = bin[i] ? 255 : 0;
   return alpha;
 }
-function componentCount(bin, w, h) {
+function growAlongColor(bin, photo, w, h) {
   const n = w * h;
-  const seen = new Uint8Array(n);
-  let count = 0;
-  const stack = new Int32Array(n);
-  for (let start = 0; start < n; start++) {
-    if (!bin[start] || seen[start]) continue;
-    let sp = 0;
-    let area = 0;
-    stack[sp++] = start;
-    seen[start] = 1;
-    while (sp > 0) {
-      const p = stack[--sp];
-      area++;
-      const x = p % w;
-      const y = (p - x) / w;
-      const push = (q) => {
-        if (!seen[q] && bin[q]) {
-          seen[q] = 1;
-          stack[sp++] = q;
-        }
-      };
-      if (x > 0) push(p - 1);
-      if (x + 1 < w) push(p + 1);
-      if (y > 0) push(p - w);
-      if (y + 1 < h) push(p + w);
-    }
-    if (area > 40) count++;
+  const maxR = 110;
+  const dist = new Int16Array(n);
+  dist.fill(-1);
+  const q = new Int32Array(n);
+  let qs = 0;
+  let qe = 0;
+  let seeds = 0;
+  for (let i = 0; i < n; i++) {
+    if (!bin[i]) continue;
+    dist[i] = 0;
+    q[qe++] = i;
+    seeds++;
   }
-  return count;
-}
-function convexHullFill(bin, w, h) {
-  const pts = [];
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) if (bin[y * w + x]) pts.push([x, y]);
+  if (!seeds) return bin;
+  while (qs < qe) {
+    const p = q[qs++];
+    if (dist[p] >= maxR) continue;
+    const x = p % w;
+    const y = (p - x) / w;
+    const next = dist[p] + 1;
+    const see = (nb) => {
+      if (dist[nb] >= 0) return;
+      dist[nb] = next;
+      q[qe++] = nb;
+    };
+    if (x > 0) see(p - 1);
+    if (x + 1 < w) see(p + 1);
+    if (y > 0) see(p - w);
+    if (y + 1 < h) see(p + w);
   }
-  if (pts.length < 3) return bin;
-  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const build = (source) => {
-    const chain = [];
-    for (const p of source) {
-      while (chain.length >= 2 && cross(chain[chain.length - 2], chain[chain.length - 1], p) <= 0) chain.pop();
-      chain.push(p);
-    }
-    return chain;
-  };
-  const lower = build(pts);
-  const upper = build(pts.slice().reverse());
-  upper.pop();
-  lower.pop();
-  const hull = lower.concat(upper);
-  if (hull.length < 3) return bin;
   const out = bin.slice();
-  const edges = hull.length;
-  let minY = h;
-  let maxY = 0;
-  for (const p of hull) {
-    if (p[1] < minY) minY = p[1];
-    if (p[1] > maxY) maxY = p[1];
+  const seedR = new Uint8ClampedArray(n);
+  const seedG = new Uint8ClampedArray(n);
+  const seedB = new Uint8ClampedArray(n);
+  qs = 0;
+  qe = 0;
+  for (let i = 0; i < n; i++) {
+    if (!bin[i]) continue;
+    const o = i * 4;
+    seedR[i] = photo[o];
+    seedG[i] = photo[o + 1];
+    seedB[i] = photo[o + 2];
+    q[qe++] = i;
   }
+  const maxAdd = seeds * 8;
   let added = 0;
-  for (let y = minY; y <= maxY; y++) {
-    const xs = [];
-    for (let i = 0; i < edges; i++) {
-      const a = hull[i];
-      const b = hull[(i + 1) % edges];
-      if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) {
-        const t = (y - a[1]) / (b[1] - a[1]);
-        xs.push(a[0] + t * (b[0] - a[0]));
-      }
-    }
-    xs.sort((a, b) => a - b);
-    for (let k = 0; k + 1 < xs.length; k += 2) {
-      const x0 = Math.max(0, Math.ceil(xs[k]));
-      const x1 = Math.min(w - 1, Math.floor(xs[k + 1]));
-      for (let x = x0; x <= x1; x++) {
-        const i = y * w + x;
-        if (!out[i]) {
-          out[i] = 1;
-          added++;
-        }
-      }
-    }
+  while (qs < qe && added < maxAdd) {
+    const p = q[qs++];
+    const x = p % w;
+    const y = (p - x) / w;
+    const po = p * 4;
+    const take = (nb) => {
+      if (out[nb] || dist[nb] < 0) return;
+      const o = nb * 4;
+      const step = Math.hypot(photo[o] - photo[po], photo[o + 1] - photo[po + 1], photo[o + 2] - photo[po + 2]);
+      if (step > 38) return;
+      const toSeed = Math.hypot(photo[o] - seedR[p], photo[o + 1] - seedG[p], photo[o + 2] - seedB[p]);
+      if (toSeed > 64) return;
+      out[nb] = 1;
+      seedR[nb] = seedR[p];
+      seedG[nb] = seedG[p];
+      seedB[nb] = seedB[p];
+      q[qe++] = nb;
+      added++;
+    };
+    if (x > 0) take(p - 1);
+    if (x + 1 < w) take(p + 1);
+    if (y > 0) take(p - w);
+    if (y + 1 < h) take(p + w);
   }
-  const original = pts.length;
-  if (added > original * 8) return bin;
   return out;
 }
 function buildCutout(options) {
@@ -615,7 +600,7 @@ function buildCutout(options) {
   bin = keepLarge(bin, workW, workH, 0.008);
   const maxHole = Math.floor(workW * workH * 0.12);
   bin = fillSmallHoles(bin, workW, workH, maxHole);
-  if (componentCount(bin, workW, workH) >= 2) bin = convexHullFill(bin, workW, workH);
+  bin = growAlongColor(bin, photo, workW, workH);
   bin = fillSmallHoles(bin, workW, workH, maxHole);
   bin = keepLarge(bin, workW, workH, 0.05);
   const contract = Math.max(0, Math.round(options.contract));
