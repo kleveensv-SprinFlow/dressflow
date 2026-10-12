@@ -1,10 +1,12 @@
-import { env, pipeline, RawImage } from "@huggingface/transformers";
+import { AutoModel, AutoProcessor, env, pipeline, RawImage } from "@huggingface/transformers";
 env.allowLocalModels = false;
 if (env.backends?.onnx?.wasm) {
   env.backends.onnx.wasm.numThreads = 1;
   env.backends.onnx.wasm.proxy = false;
 }
 let segmenterPromise = null;
+let matterPromise = null;
+const MATTE_ID = "onnx-community/BiRefNet_lite-ONNX";
 const scope = self;
 function postProgress(status, progress) {
   scope.postMessage({ type: "progress", status, progress });
@@ -23,6 +25,79 @@ function getSegmenter() {
     });
   }
   return segmenterPromise;
+}
+function getMatter(dtype) {
+  if (!matterPromise) {
+    const progress_callback = (update) => {
+      postProgress(update.status ?? "download", update.progress);
+    };
+    matterPromise = Promise.all([
+      AutoModel.from_pretrained(MATTE_ID, { dtype, device: "wasm", progress_callback }),
+      AutoProcessor.from_pretrained(MATTE_ID, { progress_callback })
+    ]).then(([model, processor]) => ({ model, processor, dtype })).catch((error) => {
+      matterPromise = null;
+      throw error;
+    });
+  }
+  return matterPromise;
+}
+function toRgb(image) {
+  if (image.channels === 3) return image;
+  const rgb = new Uint8ClampedArray(image.width * image.height * 3);
+  const src = image.data;
+  for (let i = 0, j = 0; i < src.length; i += 4, j += 3) {
+    rgb[j] = src[i];
+    rgb[j + 1] = src[i + 1];
+    rgb[j + 2] = src[i + 2];
+  }
+  return new RawImage(rgb, image.width, image.height, 3);
+}
+function maskFromOutput(tensor, width, height) {
+  let plane = tensor;
+  if (plane.dims.length === 4) plane = plane[0][0];
+  else if (plane.dims.length === 3) plane = plane[0];
+  const soft = plane.sigmoid();
+  const h = soft.dims[soft.dims.length - 2];
+  const w = soft.dims[soft.dims.length - 1];
+  const src = soft.data;
+  const out = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(h - 1, Math.floor(y * h / height));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(w - 1, Math.floor(x * w / width));
+      out[y * width + x] = Math.max(0, Math.min(255, Math.round(src[sy * w + sx] * 255)));
+    }
+  }
+  return { data: out, width, height };
+}
+async function inferMatte(image) {
+  let matter = await getMatter("fp16");
+  const rgb = toRgb(image);
+  const run = async (current) => {
+    const { pixel_values } = await current.processor(rgb);
+    const out = await current.model({ input_image: pixel_values });
+    return maskFromOutput(out.output_image, image.width, image.height);
+  };
+  try {
+    return await run(matter);
+  } catch (error) {
+    if (matter.dtype === "fp32") throw error;
+    matterPromise = null;
+    matter = await getMatter("fp32");
+    return run(matter);
+  }
+}
+function cropGray(mask, sideW, sideH, ox, oy, sw, sh) {
+  const cropped = new Uint8Array(sw * sh);
+  const data = mask.data;
+  for (let y = 0; y < sh; y++) {
+    const my = Math.min(sideH - 1, Math.max(0, oy + y));
+    for (let x = 0; x < sw; x++) {
+      const mx = Math.min(sideW - 1, Math.max(0, ox + x));
+      cropped[y * sw + x] = data[my * sideW + mx];
+    }
+  }
+  return cropped;
 }
 function classMap(items, sideW, sideH, ox, oy, sw, sh) {
   const labels = ["Background"];
@@ -59,11 +134,18 @@ function classMap(items, sideW, sideH, ox, oy, sw, sh) {
 scope.onmessage = async (event) => {
   const message = event.data;
   try {
-    postProgress("segment");
-    const segmenter = await getSegmenter();
     const pixels = new Uint8ClampedArray(message.buffer);
     const image = new RawImage(pixels, message.width, message.height, 4);
+    let matte = null;
+    try {
+      postProgress("segment");
+      const mask = await inferMatte(image);
+      matte = cropGray(mask, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
+    } catch {
+      matte = null;
+    }
     postProgress("segment");
+    const segmenter = await getSegmenter();
     const output = await segmenter(image);
     const mapped = classMap(
       output,
@@ -75,16 +157,19 @@ scope.onmessage = async (event) => {
       message.sh
     );
     const buffer = mapped.classIds.buffer.slice(0);
+    const matteBuffer = matte ? matte.buffer.slice(0) : null;
+    const transfer = matteBuffer ? [buffer, matteBuffer] : [buffer];
     scope.postMessage(
       {
         type: "result",
         id: message.id,
         buffer,
+        matte: matteBuffer,
         width: message.sw,
         height: message.sh,
         labels: mapped.labels
       },
-      [buffer]
+      transfer
     );
   } catch (error) {
     const text = error instanceof Error ? error.message : "D\xE9coupe impossible";

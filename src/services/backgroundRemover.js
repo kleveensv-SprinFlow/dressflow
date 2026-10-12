@@ -1,7 +1,7 @@
 /**
  * Détourage vêtement, 100 % dans le téléphone.
  *
- * SegFormer (vêtements) retire le fond, le visage, les cheveux et la peau.
+ * BiRefNet retire le fond. SegFormer ne sert qu’à proposer la catégorie.
  * Les pixels du tissu d’origine sont conservés, sur un fond transparent.
  * Si le modèle n’est pas encore téléchargé ou qu’aucun vêtement n’est vu,
  * la photo d’origine est gardée : l’ajout n’est jamais bloqué.
@@ -101,6 +101,7 @@ async function ensureSession(file) {
     workH,
     labels: seg.labels,
     classIds: seg.classIds,
+    matte: seg.matte,
     maskW: seg.width,
     maskH: seg.height
   }
@@ -117,6 +118,7 @@ async function renderSession(session, group) {
     photo: session.photo,
     workW: session.workW,
     workH: session.workH,
+    matte: session.matte,
     group,
     contract: 0,
     softness: 0

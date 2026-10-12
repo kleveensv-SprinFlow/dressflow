@@ -20,6 +20,7 @@ function ensureWorker() {
     }
     job.resolve({
       classIds: new Uint8Array(data.buffer),
+      matte: data.matte ? new Uint8Array(data.matte) : null,
       width: data.width,
       height: data.height,
       labels: data.labels

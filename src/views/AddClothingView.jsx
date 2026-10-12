@@ -300,7 +300,7 @@ const AddClothingView = ({
               onSelect={(val) => onCategoryCutout ? onCategoryCutout(val) : setNewItem({ ...newItem, main_category: val, type: '' })}
             />
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '8px 0 0' }}>
-              Haut garde le t-shirt ou la veste. Bas garde le pantalon. Chaussures, seulement les chaussures.
+              Le fond est retiré. La catégorie sert à ranger la pièce. S’il reste la main, enlève-la avec Corriger.
             </p>
           </section>
 

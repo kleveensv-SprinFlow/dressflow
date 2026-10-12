@@ -584,7 +584,33 @@ function growAlongColor(bin, photo, w, h) {
   }
   return out;
 }
+function resizeGray(src, sw, sh, dw, dh) {
+  const out = new Uint8Array(dw * dh);
+  for (let y = 0; y < dh; y++) {
+    const sy = Math.min(sh - 1, Math.max(0, Math.floor(y * sh / dh)));
+    for (let x = 0; x < dw; x++) {
+      const sx = Math.min(sw - 1, Math.max(0, Math.floor(x * sw / dw)));
+      out[y * dw + x] = src[sy * sw + sx];
+    }
+  }
+  return out;
+}
+function cutFromMatte(options) {
+  const alpha = resizeGray(options.matte, options.maskW, options.maskH, options.workW, options.workH);
+  for (let i = 0; i < alpha.length; i++) if (alpha[i] < 16) alpha[i] = 0;
+  const rgba = rgbaFromAlpha(options.photo, alpha);
+  return {
+    rgba,
+    alpha,
+    coverage: coverageOf(alpha),
+    zones: zonesFromIds(options.labels, options.classIds)
+  };
+}
 function buildCutout(options) {
+  if (options.matte && options.matte.length === options.maskW * options.maskH) {
+    const cut = cutFromMatte(options);
+    if (cut.coverage >= 0.01) return cut;
+  }
   const { labels, photo, workW, workH, group } = options;
   const ids = resizeIds(options.classIds, options.maskW, options.maskH, workW, workH);
   const idOf = new Map(labels.map((label, index) => [label, index]));
