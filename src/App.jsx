@@ -106,6 +106,7 @@ function App() {
   const fileInputRef = useRef(null)
   const galleryInputRef = useRef(null)
   const cutoutSeq = useRef(0)
+  const lassoRef = useRef(null)
 
   const [newItem, setNewItem] = useState({ main_category: null, type: '', color: 'Blanc', pattern: 'Uni', season: [currentSeason()], activity: ['Quotidien'], icon: '👕' })
   const [selectedImage, setSelectedImage] = useState(null)
@@ -115,6 +116,7 @@ function App() {
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 })
   const [tempFile, setTempFile] = useState(null)
   const [originalFile, setOriginalFile] = useState(null)
+  const [lassoMode, setLassoMode] = useState(false)
   const [cutoutFile, setCutoutFile] = useState(null)
 
   const filteredItems = useMemo(() => {
@@ -693,14 +695,16 @@ function App() {
     }
   };
 
-  const publishCutout = async (file, mainCategory) => {
+  const publishCutout = async (file, mainCategory, lasso = lassoRef.current) => {
     const seq = ++cutoutSeq.current
     setIsProcessingCutout(true)
     try {
-      const { file: processed, removed, main_category, type, pattern } = await removeBackground(file, mainCategory)
+      const { file: processed, removed, main_category, type, pattern, reason } = await removeBackground(file, mainCategory, lasso)
       if (seq !== cutoutSeq.current) return false
       if (!removed) {
-        if (mainCategory) toast.error("Cette pièce n’est pas visible sur la photo.")
+        const why = String(reason || '').slice(0, 300)
+        if (why === 'Aucun vêtement de cette catégorie') toast.error("Cette pièce n’est pas visible sur la photo.")
+        else toast.error(`Détourage impossible : ${why || 'erreur inconnue'}`, { duration: 15000 })
         return false
       }
       setCutoutFile(processed)
@@ -731,6 +735,18 @@ function App() {
     setTempFile(file)
     setSelectedImage(URL.createObjectURL(file))
     setUseCutout(true)
+  }
+
+  const handleLasso = (points) => {
+    lassoRef.current = points
+    setLassoMode(false)
+    if (originalFile) publishCutout(originalFile, undefined, points)
+  }
+
+  const handleAutoCutout = () => {
+    lassoRef.current = null
+    setLassoMode(false)
+    if (originalFile) publishCutout(originalFile, undefined, null)
   }
 
   const handleCategoryCutout = (main) => {
@@ -815,7 +831,8 @@ function App() {
         setSelectedImage(origUrl);
         setUseCutout(false);
         setView('add-detail');
-        publishCutout(file);
+        lassoRef.current = null;
+        setLassoMode(true);
       } else {
         // Ajout groupé : initialisation immédiate
         const initialBulk = acceptedFiles.map(file => ({
@@ -966,6 +983,8 @@ function App() {
       setTempFile(null);
       setOriginalFile(null);
       setCutoutFile(null);
+      setLassoMode(false);
+      lassoRef.current = null;
       toast.success("Ajouté avec succès !");
     } catch (err) {
       if (uploadedPath) await supabase.storage.from('clothes-images').remove([uploadedPath]).catch(() => {});
@@ -1162,6 +1181,11 @@ function App() {
               onBulkCategory={handleBulkCategory}
               originalFile={originalFile}
               onBrushCommit={handleBrushCommit} 
+              lassoMode={lassoMode}
+              onLasso={handleLasso}
+              onAutoCutout={handleAutoCutout}
+              onSkipLasso={() => setLassoMode(false)}
+              onRelasso={() => setLassoMode(true)}
             />
           )}
 

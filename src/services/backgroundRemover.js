@@ -9,8 +9,10 @@
 import { drawModelInput, segmentSquare } from './cutout/segment-client.js'
 import { buildCutout, dominantGroup } from './cutout/refine.js'
 import { detectMotif, motifName } from './cutout/facts.js'
+import { cropBox, cutFromLasso, lassoToCrop } from './cutout/lasso.js'
 
 const WORK_MAX = 960
+const CROP_MAX = 1280
 
 const LABEL_PIECE = {
   'Upper-clothes': { main_category: 'Haut', type: '' },
@@ -78,30 +80,51 @@ function fileToImage(file) {
   })
 }
 
-async function ensureSession(file) {
+function lassoKey(lasso) {
+  return lasso ? lasso.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`).join(';') : ''
+}
+
+async function ensureSession(file, lasso) {
+  const key = lassoKey(lasso)
   const cached = sessions.get(file)
-  if (cached) return cached
+  if (cached?.labels && cached.key === key) return cached
   const img = await fileToImage(file)
   const width = img.naturalWidth || img.width
   const height = img.naturalHeight || img.height
-  const scale = Math.min(1, WORK_MAX / Math.max(width, height))
-  const workW = Math.max(1, Math.round(width * scale))
-  const workH = Math.max(1, Math.round(height * scale))
+  // Avec un tracé, on ne garde que la zone autour de la pièce : le modèle la voit plus grande.
+  const box = lasso ? cropBox(lasso, width, height) : { x: 0, y: 0, w: width, h: height }
+  const k = Math.min(1, CROP_MAX / Math.max(box.w, box.h))
+  const cropW = Math.max(1, Math.round(box.w * k))
+  const cropH = Math.max(1, Math.round(box.h * k))
+  const cropCanvas = document.createElement('canvas')
+  cropCanvas.width = cropW
+  cropCanvas.height = cropH
+  cropCanvas.getContext('2d').drawImage(img, box.x, box.y, box.w, box.h, 0, 0, cropW, cropH)
+  const scale = Math.min(1, WORK_MAX / Math.max(cropW, cropH))
+  const workW = Math.max(1, Math.round(cropW * scale))
+  const workH = Math.max(1, Math.round(cropH * scale))
   const canvas = document.createElement('canvas')
   canvas.width = workW
   canvas.height = workH
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(img, 0, 0, workW, workH)
+  ctx.drawImage(cropCanvas, 0, 0, workW, workH)
   const photo = ctx.getImageData(0, 0, workW, workH)
-  const model = drawModelInput(img, width, height)
-  const seg = await segmentSquare(model.image, model.crop, () => {})
+  // La photo est gardée tout de suite : si le modèle échoue, l’éditeur peut quand même l’afficher.
+  sessions.set(file, { photo: photo.data, workW, workH, key })
+  const cropLasso = lasso ? lassoToCrop(lasso, box, width, height) : null
+  const model = drawModelInput(cropCanvas, cropW, cropH)
+  // Avec un tracé : SlimSAM suit la consigne (repli BiRefNet). Sans tracé : BiRefNet seul.
+  const seg = await segmentSquare(model.image, model.crop, () => {}, cropLasso)
   const session = {
     photo: photo.data,
     workW,
     workH,
+    key,
+    lasso: cropLasso,
     labels: seg.labels,
     classIds: seg.classIds,
     matte: seg.matte,
+    matteSource: seg.source,
     maskW: seg.width,
     maskH: seg.height
   }
@@ -110,19 +133,31 @@ async function ensureSession(file) {
 }
 
 async function renderSession(session, group) {
-  const cut = buildCutout({
-    labels: session.labels,
-    classIds: session.classIds,
-    maskW: session.maskW,
-    maskH: session.maskH,
-    photo: session.photo,
-    workW: session.workW,
-    workH: session.workH,
-    matte: session.matte,
-    group,
-    contract: 0,
-    softness: 0
-  })
+  const cut = session.lasso
+    ? cutFromLasso({
+        lasso: session.lasso,
+        matte: session.matte,
+        maskW: session.maskW,
+        maskH: session.maskH,
+        classIds: session.classIds,
+        labels: session.labels,
+        photo: session.photo,
+        workW: session.workW,
+        workH: session.workH
+      })
+    : buildCutout({
+        labels: session.labels,
+        classIds: session.classIds,
+        maskW: session.maskW,
+        maskH: session.maskH,
+        photo: session.photo,
+        workW: session.workW,
+        workH: session.workH,
+        matte: session.matte,
+        group,
+        contract: 0,
+        softness: 0
+      })
   if (cut.coverage < 0.008) throw new Error('Aucun vêtement de cette catégorie')
   session.rgba = new Uint8ClampedArray(cut.rgba)
   const canvas = document.createElement('canvas')
@@ -141,8 +176,8 @@ async function renderSession(session, group) {
   }
 }
 
-async function cutoutLocally(file, mainCategory) {
-  const session = await ensureSession(file)
+async function cutoutLocally(file, mainCategory, lasso) {
+  const session = await ensureSession(file, lasso)
   const group = groupFromCategory(mainCategory) || dominantGroup(session.labels, session.classIds)
   return renderSession(session, group === 'tout' ? 'haut' : group)
 }
@@ -236,9 +271,9 @@ export const trimAndScaleTransparentImage = async (imageBlob, maxDimension = 102
  * Garde uniquement le tissu, sur un fond transparent.
  * Le visage, la peau et le décor sont retirés. Les pixels du vêtement ne sont pas redessinés.
  */
-export const removeBackground = async (file, mainCategory) => {
+export const removeBackground = async (file, mainCategory, lasso = null) => {
   try {
-    const local = await cutoutLocally(file, mainCategory)
+    const local = await cutoutLocally(file, mainCategory, lasso)
     const trimmedBlob = await trimAndScaleTransparentImage(local.blob, 1024)
     const baseName = (file.name || 'clothing').replace(/\.[^/.]+$/, '')
     const processedFile = new File([trimmedBlob], `${baseName}_cutout.webp`, { type: 'image/webp' })
@@ -262,11 +297,11 @@ export const removeBackground = async (file, mainCategory) => {
 /** Pixels d’origine + découpe courante, pour corriger au doigt. */
 export function readEdit(file) {
   const session = sessions.get(file)
-  if (!session?.rgba) return null
+  if (!session) return null
   return {
     width: session.workW,
     height: session.workH,
-    rgba: session.rgba,
+    rgba: session.rgba || session.photo,
     photo: session.photo
   }
 }

@@ -1,4 +1,5 @@
-import { AutoModel, AutoProcessor, env, pipeline, RawImage } from "@huggingface/transformers";
+import { AutoModel, AutoProcessor, env, pipeline, RawImage, SamModel } from "@huggingface/transformers";
+import { exitPoints, lassoRegions, pickSamMask, samPrompts } from "./lasso.js";
 env.allowLocalModels = false;
 if (env.backends?.onnx?.wasm) {
   env.backends.onnx.wasm.numThreads = 1;
@@ -6,7 +7,11 @@ if (env.backends?.onnx?.wasm) {
 }
 let segmenterPromise = null;
 let matterPromise = null;
+let matterDtype = null;
+let samPromise = null;
 const MATTE_ID = "onnx-community/BiRefNet_lite-ONNX";
+// SlimSAM : SAM allégé (~40 Mo), suit les points donnés par le tracé.
+const SAM_ID = "Xenova/slimsam-77-uniform";
 const scope = self;
 function postProgress(status, progress) {
   scope.postMessage({ type: "progress", status, progress });
@@ -28,6 +33,7 @@ function getSegmenter() {
 }
 function getMatter(dtype) {
   if (!matterPromise) {
+    matterDtype = dtype;
     const progress_callback = (update) => {
       postProgress(update.status ?? "download", update.progress);
     };
@@ -70,22 +76,92 @@ function maskFromOutput(tensor, width, height) {
   }
   return { data: out, width, height };
 }
-async function inferMatte(image) {
-  let matter = await getMatter("fp16");
-  const rgb = toRgb(image);
-  const run = async (current) => {
-    const { pixel_values } = await current.processor(rgb);
-    const out = await current.model({ input_image: pixel_values });
-    return maskFromOutput(out.output_image, image.width, image.height);
-  };
-  try {
-    return await run(matter);
-  } catch (error) {
-    if (matter.dtype === "fp32") throw error;
-    matterPromise = null;
-    matter = await getMatter("fp32");
-    return run(matter);
+async function inferMatte(image, side, dtype) {
+  const matter = await getMatter(dtype);
+  const small = await toRgb(image).resize(side, side);
+  const ip = matter.processor.image_processor;
+  if (ip) {
+    ip.size = { width: side, height: side };
+    ip.do_resize = false;
   }
+  const { pixel_values } = await matter.processor(small);
+  const dims = pixel_values.dims;
+  if (dims[dims.length - 1] !== side) throw new Error(`taille d'entr\xE9e ${dims.join("x")} au lieu de ${side}`);
+  const out = await matter.model({ input_image: pixel_values });
+  return maskFromOutput(out.output_image, image.width, image.height);
+}
+function getSam(dtype) {
+  if (!samPromise) {
+    const progress_callback = (update) => {
+      postProgress(update.status ?? "download", update.progress);
+    };
+    samPromise = Promise.all([
+      SamModel.from_pretrained(SAM_ID, { dtype, device: "wasm", progress_callback }),
+      AutoProcessor.from_pretrained(SAM_ID, { progress_callback })
+    ]).then(([model, processor]) => ({ model, processor })).catch((error) => {
+      samPromise = null;
+      throw error;
+    });
+  }
+  return samPromise;
+}
+/**
+ * SlimSAM guidé par le tracé (lasso en 0..1 de la zone utile ox/oy/sw/sh).
+ * L'image est encodée une seule fois, puis le décodeur (rapide) tourne :
+ * 1. avec les points du tracé ;
+ * 2. si le masque sort du tracé (objet voisin collé à la pièce), avec des points « fond » posés sur cette sortie.
+ */
+async function samFromLasso(image, message) {
+  const { ox, oy, sw, sh, lasso } = message;
+  const sam = await getSam(message.dtype);
+  const ip = sam.processor.image_processor ?? sam.processor;
+  const rgb = toRgb(image);
+  const base = await sam.processor(rgb);
+  const embeddings = await sam.model.get_image_embeddings(base);
+  const regions = lassoRegions(lasso, sw, sh);
+  const toPx = (p) => [ox + p.x * sw, oy + p.y * sh];
+
+  async function decode(points, labels) {
+    const input_points = ip.reshape_input_points([[points.map(toPx)]], base.original_sizes, base.reshaped_input_sizes);
+    const input_labels = ip.add_input_labels([[labels]], input_points);
+    const out = await sam.model({ ...embeddings, input_points, input_labels });
+    const [logits] = await ip.post_process_masks(out.pred_masks, base.original_sizes, base.reshaped_input_sizes, {
+      binarize: false
+    });
+    const count = logits.dims[1];
+    const W = image.width;
+    const plane = W * image.height;
+    const src = logits.data;
+    const masks = [];
+    for (let m = 0; m < count; m++) {
+      // Seule la zone utile est gardée ; logit → probabilité adoucie pour le filtre guidé.
+      const mask = new Uint8Array(sw * sh);
+      const off = m * plane;
+      for (let y = 0; y < sh; y++) {
+        const row = off + (oy + y) * W + ox;
+        for (let x = 0; x < sw; x++) mask[y * sw + x] = Math.round(255 / (1 + Math.exp(-src[row + x] * 0.5)));
+      }
+      masks.push(mask);
+    }
+    const scores = Array.from(out.iou_scores.data).slice(0, count);
+    const best = pickSamMask(masks, scores, lasso, sw, sh, regions);
+    return best ? { ...best, mask: masks[best.index] } : null;
+  }
+
+  const prompts = samPrompts(lasso, sw / sh);
+  let best = await decode(prompts.points, prompts.labels);
+  let passes = 1;
+  if (best && best.exit > 0.01) {
+    const extra = exitPoints(best.mask, regions, sw, sh, 3);
+    if (extra.length) {
+      const retry = await decode([...prompts.points, ...extra], [...prompts.labels, ...extra.map(() => 0)]);
+      passes = 2;
+      // On garde la seconde passe si elle sort nettement moins du tracé sans perdre la pièce.
+      if (retry && retry.exit < best.exit * 0.6 && retry.fill >= best.fill * 0.5) best = retry;
+    }
+  }
+  if (!best) return null;
+  return { mask: best.mask, fill: best.fill, exit: best.exit, passes };
 }
 function cropGray(mask, sideW, sideH, ox, oy, sw, sh) {
   const cropped = new Uint8Array(sw * sh);
@@ -136,40 +212,48 @@ scope.onmessage = async (event) => {
   try {
     const pixels = new Uint8ClampedArray(message.buffer);
     const image = new RawImage(pixels, message.width, message.height, 4);
-    let matte = null;
-    try {
+    if (message.kind === "sam") {
       postProgress("segment");
-      const mask = await inferMatte(image);
-      matte = cropGray(mask, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
-    } catch {
-      matte = null;
+      const result = await samFromLasso(image, message);
+      if (!result) {
+        scope.postMessage({ type: "result", id: message.id, matte: null });
+        return;
+      }
+      const buffer = result.mask.buffer;
+      scope.postMessage(
+        {
+          type: "result",
+          id: message.id,
+          matte: buffer,
+          width: message.sw,
+          height: message.sh,
+          fill: result.fill,
+          exit: result.exit,
+          passes: result.passes
+        },
+        [buffer]
+      );
+      return;
+    }
+    if (message.kind === "matte") {
+      postProgress("segment");
+      const mask = await inferMatte(image, message.side, message.dtype);
+      const matte = cropGray(mask, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
+      const buffer = matte.buffer.slice(0);
+      scope.postMessage(
+        { type: "result", id: message.id, matte: buffer, width: message.sw, height: message.sh },
+        [buffer]
+      );
+      return;
     }
     postProgress("segment");
     const segmenter = await getSegmenter();
     const output = await segmenter(image);
-    const mapped = classMap(
-      output,
-      message.width,
-      message.height,
-      message.ox,
-      message.oy,
-      message.sw,
-      message.sh
-    );
+    const mapped = classMap(output, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
     const buffer = mapped.classIds.buffer.slice(0);
-    const matteBuffer = matte ? matte.buffer.slice(0) : null;
-    const transfer = matteBuffer ? [buffer, matteBuffer] : [buffer];
     scope.postMessage(
-      {
-        type: "result",
-        id: message.id,
-        buffer,
-        matte: matteBuffer,
-        width: message.sw,
-        height: message.sh,
-        labels: mapped.labels
-      },
-      transfer
+      { type: "result", id: message.id, buffer, width: message.sw, height: message.sh, labels: mapped.labels },
+      [buffer]
     );
   } catch (error) {
     const text = error instanceof Error ? error.message : "D\xE9coupe impossible";
