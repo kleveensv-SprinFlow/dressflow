@@ -42,6 +42,7 @@ function runJob(payload, image, crop, progress) {
   });
 }
 const MATTE_ATTEMPTS = [
+  { dtype: "fp32", side: 768 },
   { dtype: "fp32", side: 512 },
   { dtype: "fp32", side: 384 },
   { dtype: "fp32", side: 256 }
