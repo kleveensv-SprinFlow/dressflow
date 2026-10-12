@@ -29,7 +29,7 @@ const TravelView = ({
       <header style={{ marginBottom: '1.4rem' }}>
         <h2 className="title" style={{ fontSize: '2.6rem' }}>Voyage</h2>
         <p className="subtitle" style={{ marginTop: '6px' }}>
-          La valise est calculée avec tes pièces, la météo et ces réponses.
+          Combien emporter. Coche chaque ligne une fois dans la valise.
         </p>
       </header>
 
@@ -94,42 +94,57 @@ const TravelView = ({
             <span className="subtitle" style={{ margin: 0 }}>{Math.round((suitcaseChecked.length / suitcase.length) * 100)} %</span>
           </div>
           {suitcaseNote && <p className="subtitle" style={{ marginTop: '4px' }}>{suitcaseNote}</p>}
-          <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.6rem' }}>
-            {suitcase.map((pack) => {
-              const packedId = String(pack.id);
-              const isChecked = suitcaseChecked.includes(packedId);
-              return (
-                <button
-                  key={packedId}
-                  type="button"
-                  onClick={() => onTogglePacked(packedId)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    width: '100%',
-                    textAlign: 'left',
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottom: '1px solid var(--border)',
-                    padding: '0.75rem 0',
-                    cursor: 'pointer',
-                    opacity: isChecked ? 0.45 : 1
-                  }}
-                >
-                  <div style={{ width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
-                    {pack.image_url
-                      ? <img src={pack.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                      : <span>{pack.icon}</span>}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '0.62rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{pack.category}</div>
-                    <div>{pack.type}{pack.color ? ` · ${pack.color}` : ''}</div>
-                  </div>
-                  {isChecked && <Check size={16} />}
-                </button>
-              );
-            })}
+          <div style={{ marginTop: '1rem' }}>
+            {suitcase.reduce((groups, pack) => {
+              const last = groups[groups.length - 1];
+              if (!last || last.name !== pack.category) groups.push({ name: pack.category, rows: [pack] });
+              else last.rows.push(pack);
+              return groups;
+            }, []).map(group => (
+              <section key={group.name} style={{ marginBottom: '1.1rem' }}>
+                <h4 style={{ margin: '0 0 0.2rem', fontSize: '0.66rem', letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 500, color: 'var(--text-muted)' }}>{group.name}</h4>
+                {group.rows.map((pack) => {
+                  const packedId = String(pack.id);
+                  const isChecked = suitcaseChecked.includes(packedId);
+                  return (
+                    <button
+                      key={packedId}
+                      type="button"
+                      onClick={() => onTogglePacked(packedId)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        borderBottom: '1px solid var(--border)',
+                        padding: '0.8rem 0',
+                        cursor: 'pointer',
+                        color: 'inherit'
+                      }}
+                    >
+                      <span style={{
+                        width: 16,
+                        height: 16,
+                        border: '1px solid #161513',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: '0 0 auto',
+                        background: isChecked ? '#161513' : 'transparent',
+                        color: '#f3f0ea'
+                      }}>
+                        {isChecked && <Check size={12} />}
+                      </span>
+                      <span style={{ flex: 1, textDecoration: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.45 : 1 }}>{pack.label || pack.type}</span>
+                      <span style={{ letterSpacing: '0.06em' }}>× {pack.qty}</span>
+                    </button>
+                  );
+                })}
+              </section>
+            ))}
           </div>
         </section>
       )}

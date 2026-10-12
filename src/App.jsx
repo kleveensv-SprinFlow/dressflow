@@ -413,10 +413,6 @@ function App() {
       toast.error("La date de retour doit être le même jour ou après le départ.");
       return;
     }
-    if (items.length === 0) {
-      toast.error("Ajoute d’abord quelques vêtements à ton dressing.");
-      return;
-    }
     setSuitcaseLoading(true);
     try {
       const duration = differenceInDays(endDate, startDate) + 1;
@@ -427,8 +423,8 @@ function App() {
       } catch {
         try { destWeather = await getLocalWeather(travelData.lat, travelData.lon); } catch { /* on part sur 18° */ }
       }
-      const list = generatePackingList(items, destWeather, duration, trip);
-      if (list.length === 0) throw new Error("Aucune pièce exploitable n’a été trouvée dans ton dressing.");
+      const list = generatePackingList(destWeather, duration, trip);
+      if (list.length === 0) throw new Error("Impossible de calculer la valise.");
       setSuitcase(list);
       setSuitcaseChecked([]);
       setSuitcaseNote(describePacking(destWeather, duration, trip));
