@@ -1,49 +1,34 @@
-let worker = null;
 let seq = 0;
-const pending = /* @__PURE__ */ new Map();
-let onProgress = null;
-function ensureWorker() {
-  if (worker) return worker;
-  worker = new Worker(new URL("./segment.worker.js", import.meta.url), { type: "module" });
-  worker.onmessage = (event) => {
-    const data = event.data;
-    if (data.type === "progress") {
-      onProgress?.({ status: data.status, progress: data.progress });
-      return;
-    }
-    const job = pending.get(data.id);
-    if (!job) return;
-    pending.delete(data.id);
-    if (data.type === "error") {
-      job.reject(new Error(data.message));
-      return;
-    }
-    job.resolve({
-      classIds: new Uint8Array(data.buffer),
-      matte: data.matte ? new Uint8Array(data.matte) : null,
-      width: data.width,
-      height: data.height,
-      labels: data.labels
-    });
-  };
-  worker.onerror = () => {
-    const error = new Error("Le moteur de d\xE9coupe s\u2019est arr\xEAt\xE9. R\xE9essayez.");
-    for (const job of pending.values()) job.reject(error);
-    pending.clear();
-    worker?.terminate();
-    worker = null;
-  };
-  return worker;
-}
-function segmentSquare(image, crop, progress) {
-  onProgress = progress;
+// Un moteur neuf par étape : la mémoire WASM ne se libère pas, il faut jeter le worker.
+function runJob(payload, image, crop, progress) {
   const id = ++seq;
   const copy = image.data.buffer.slice(0);
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    ensureWorker().postMessage(
+    const worker = new Worker(new URL("./segment.worker.js", import.meta.url), { type: "module" });
+    const done = (fn, value) => {
+      worker.terminate();
+      fn(value);
+    };
+    worker.onmessage = (event) => {
+      const data = event.data;
+      if (data.type === "progress") {
+        progress?.({ status: data.status, progress: data.progress });
+        return;
+      }
+      if (data.id !== id) return;
+      if (data.type === "error") {
+        done(reject, new Error(data.message));
+        return;
+      }
+      done(resolve, data);
+    };
+    worker.onerror = (event) => {
+      done(reject, new Error(event?.message || "le moteur s\u2019est arr\xEAt\xE9"));
+    };
+    worker.postMessage(
       {
         id,
+        ...payload,
         buffer: copy,
         width: image.width,
         height: image.height,
@@ -55,6 +40,39 @@ function segmentSquare(image, crop, progress) {
       [copy]
     );
   });
+}
+const MATTE_ATTEMPTS = [
+  { dtype: "fp32", side: 512 },
+  { dtype: "fp32", side: 384 },
+  { dtype: "fp32", side: 256 }
+];
+async function segmentSquare(image, crop, progress) {
+  let matte = null;
+  const failures = [];
+  for (const attempt of MATTE_ATTEMPTS) {
+    try {
+      const data = await runJob({ kind: "matte", ...attempt }, image, crop, progress);
+      matte = new Uint8Array(data.matte);
+      break;
+    } catch (error) {
+      failures.push(`${attempt.dtype}@${attempt.side}: ${error.message}`);
+    }
+  }
+  let classIds = null;
+  let labels = ["Background"];
+  let width = crop.sw;
+  let height = crop.sh;
+  try {
+    const data = await runJob({ kind: "classes" }, image, crop, progress);
+    classIds = new Uint8Array(data.buffer);
+    labels = data.labels;
+    width = data.width;
+    height = data.height;
+  } catch (error) {
+    if (!matte) throw new Error(`BiRefNet: ${failures.join(" | ")} // SegFormer: ${error.message}`);
+  }
+  if (!classIds) classIds = new Uint8Array(width * height);
+  return { classIds, matte, width, height, labels };
 }
 const MODEL_SIDE = 640;
 function drawModelInput(source, width, height) {

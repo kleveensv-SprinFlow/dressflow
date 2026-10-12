@@ -72,32 +72,19 @@ function maskFromOutput(tensor, width, height) {
   }
   return { data: out, width, height };
 }
-async function inferMatte(image) {
-  const rgb = toRgb(image);
-  const run = async (current, side) => {
-    if (side && current.processor?.image_processor) {
-      current.processor.image_processor.size = { width: side, height: side };
-    }
-    const { pixel_values } = await current.processor(rgb);
-    const out = await current.model({ input_image: pixel_values });
-    return maskFromOutput(out.output_image, image.width, image.height);
-  };
-  const errors = [];
-  const attempts = [
-    ["fp16", 0],
-    ["fp32", 0],
-    ["fp32", 512]
-  ];
-  for (const [dtype, side] of attempts) {
-    try {
-      if (matterPromise && matterDtype !== dtype) matterPromise = null;
-      return await run(await getMatter(dtype), side);
-    } catch (error) {
-      console.warn(`BiRefNet ${dtype}${side ? "@" + side : ""} a \xE9chou\xE9:`, error);
-      errors.push(`${dtype}${side ? "@" + side : ""}: ${error?.message ?? error}`);
-    }
+async function inferMatte(image, side, dtype) {
+  const matter = await getMatter(dtype);
+  const small = await toRgb(image).resize(side, side);
+  const ip = matter.processor.image_processor;
+  if (ip) {
+    ip.size = { width: side, height: side };
+    ip.do_resize = false;
   }
-  throw new Error(errors.join(" | "));
+  const { pixel_values } = await matter.processor(small);
+  const dims = pixel_values.dims;
+  if (dims[dims.length - 1] !== side) throw new Error(`taille d'entr\xE9e ${dims.join("x")} au lieu de ${side}`);
+  const out = await matter.model({ input_image: pixel_values });
+  return maskFromOutput(out.output_image, image.width, image.height);
 }
 function cropGray(mask, sideW, sideH, ox, oy, sw, sh) {
   const cropped = new Uint8Array(sw * sh);
@@ -148,50 +135,25 @@ scope.onmessage = async (event) => {
   try {
     const pixels = new Uint8ClampedArray(message.buffer);
     const image = new RawImage(pixels, message.width, message.height, 4);
-    let matte = null;
-    let matteFailure = "";
-    try {
+    if (message.kind === "matte") {
       postProgress("segment");
-      const mask = await inferMatte(image);
-      matte = cropGray(mask, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
-    } catch (matteError) {
-      console.warn("BiRefNet a \xE9chou\xE9:", matteError);
-      matteFailure = matteError?.message ?? String(matteError);
-      matte = null;
+      const mask = await inferMatte(image, message.side, message.dtype);
+      const matte = cropGray(mask, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
+      const buffer = matte.buffer.slice(0);
+      scope.postMessage(
+        { type: "result", id: message.id, matte: buffer, width: message.sw, height: message.sh },
+        [buffer]
+      );
+      return;
     }
     postProgress("segment");
-    let mapped;
-    try {
-      const segmenter = await getSegmenter();
-      const output = await segmenter(image);
-      mapped = classMap(
-        output,
-        message.width,
-        message.height,
-        message.ox,
-        message.oy,
-        message.sw,
-        message.sh
-      );
-    } catch (segError) {
-      console.warn("SegFormer a \xE9chou\xE9:", segError);
-      if (!matte) throw new Error(`BiRefNet: ${matteFailure || "?"} // SegFormer: ${segError?.message ?? segError}`);
-      mapped = { classIds: new Uint8Array(message.sw * message.sh), labels: ["Background"] };
-    }
+    const segmenter = await getSegmenter();
+    const output = await segmenter(image);
+    const mapped = classMap(output, message.width, message.height, message.ox, message.oy, message.sw, message.sh);
     const buffer = mapped.classIds.buffer.slice(0);
-    const matteBuffer = matte ? matte.buffer.slice(0) : null;
-    const transfer = matteBuffer ? [buffer, matteBuffer] : [buffer];
     scope.postMessage(
-      {
-        type: "result",
-        id: message.id,
-        buffer,
-        matte: matteBuffer,
-        width: message.sw,
-        height: message.sh,
-        labels: mapped.labels
-      },
-      transfer
+      { type: "result", id: message.id, buffer, width: message.sw, height: message.sh, labels: mapped.labels },
+      [buffer]
     );
   } catch (error) {
     const text = error instanceof Error ? error.message : "D\xE9coupe impossible";
