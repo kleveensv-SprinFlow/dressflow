@@ -1,18 +1,18 @@
 import React from 'react';
+import { motion } from 'framer-motion';
+
+const TABS = [
+  { id: 'dashboard', label: 'Dressing' },
+  { id: 'trip', label: 'Voyage' },
+  { id: 'stylist', label: 'Styliste' },
+  { id: 'settings', label: 'Profil' }
+];
 
 const BottomNav = ({ activeTab, onTabChange }) => {
-  const tabs = [
-    { id: 'dashboard', label: 'Dressing' },
-    { id: 'trip', label: 'Voyage' },
-    { id: 'add-choice', label: 'Ajouter' },
-    { id: 'stylist', label: 'Styliste' },
-    { id: 'settings', label: 'Profil' }
-  ];
-
   return (
     <nav className="bottom-nav" aria-label="Navigation principale">
-      {tabs.map(({ id, label }) => {
-        const active = activeTab === id || (id === 'add-choice' && ['add-choice', 'add-detail', 'bulk-add'].includes(activeTab));
+      {TABS.map(({ id, label }) => {
+        const active = activeTab === id || (id === 'dashboard' && ['add-choice', 'add-detail', 'bulk-add'].includes(activeTab));
         return (
           <button
             type="button"
@@ -21,7 +21,14 @@ const BottomNav = ({ activeTab, onTabChange }) => {
             onClick={() => onTabChange(id)}
             aria-current={active ? 'page' : undefined}
           >
-            <span>{label}</span>
+            {active && (
+              <motion.span
+                layoutId="nav-pill"
+                className="nav-pill"
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+              />
+            )}
+            <span className="nav-label">{label}</span>
           </button>
         );
       })}

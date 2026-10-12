@@ -41,6 +41,7 @@ const DashboardView = ({
               ? 'La garde-robe est vide.'
               : `${items.length} pièce${items.length > 1 ? 's' : ''}`}
           </p>
+          <button type="button" className="text-action" onClick={onAddClick}>Ajouter une pièce</button>
         </div>
         {weather?.city && (
           <button
