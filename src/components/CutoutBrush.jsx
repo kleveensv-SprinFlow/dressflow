@@ -9,6 +9,7 @@ export default function CutoutBrush({ sourceFile, tool, radius, onCommit }) {
   const canvasRef = useRef(null)
   const loupeRef = useRef(null)
   const photoRef = useRef(null)
+  const ghostRef = useRef(null)
   const pointers = useRef(new Map())
   const drawing = useRef(false)
   const last = useRef(null)
@@ -38,6 +39,12 @@ export default function CutoutBrush({ sourceFile, tool, radius, onCommit }) {
     photo.height = edit.height
     photo.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(edit.photo), edit.width, edit.height), 0, 0)
     photoRef.current = photo
+    const ghost = ghostRef.current
+    if (ghost) {
+      ghost.width = edit.width
+      ghost.height = edit.height
+      ghost.getContext('2d').drawImage(photo, 0, 0)
+    }
     setSize({ w: edit.width, h: edit.height })
     const rect = stage.getBoundingClientRect()
     const fit = Math.min(rect.width / edit.width, rect.height / edit.height) || 1
@@ -113,6 +120,11 @@ export default function CutoutBrush({ sourceFile, tool, radius, onCommit }) {
       for (let x = 0; x < loupe.width; x += 8) {
         if (((x + y) / 8) % 2 < 1) ctx.fillRect(x, y, 8, 8)
       }
+    }
+    if (photoRef.current) {
+      ctx.globalAlpha = 0.4
+      ctx.drawImage(photoRef.current, imageX - sw / 2, imageY - sh / 2, sw, sh, 0, 0, loupe.width, loupe.height)
+      ctx.globalAlpha = 1
     }
     ctx.drawImage(src, imageX - sw / 2, imageY - sh / 2, sw, sh, 0, 0, loupe.width, loupe.height)
     ctx.strokeStyle = '#111827'
@@ -247,6 +259,18 @@ export default function CutoutBrush({ sourceFile, tool, radius, onCommit }) {
         hideLoupe()
       }}
     >
+      <canvas
+        ref={ghostRef}
+        style={{
+          position: 'absolute',
+          left: laid.left,
+          top: laid.top,
+          width: laid.displayW,
+          height: laid.displayH,
+          opacity: 0.35,
+          pointerEvents: 'none'
+        }}
+      />
       <canvas
         ref={canvasRef}
         style={{
