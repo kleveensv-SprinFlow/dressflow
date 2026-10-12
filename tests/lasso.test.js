@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cropBox, cutFromLasso, lassoToCrop, rasterPolygon } from '../src/services/cutout/lasso.js'
+import { cropBox, cutFromLasso, lassoToCrop, pickSamMask, rasterPolygon, samPrompts } from '../src/services/cutout/lasso.js'
 
 const W = 120
 const H = 90
@@ -100,4 +100,50 @@ test('cropBox entoure le tracé avec une marge et reste dans la photo', () => {
   assert.ok(box.x < 300 && box.x + box.w > 900)
   const crop = lassoToCrop(lasso, box, 1200, 900)
   for (const p of crop) assert.ok(p.x > 0 && p.x < 1 && p.y > 0 && p.y < 1)
+})
+
+function inPolygon(p, poly) {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]
+    const b = poly[j]
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
+test('samPrompts : un point pièce au cœur du tracé, des points fond à l’extérieur', () => {
+  const { points, labels } = samPrompts(lasso, W / H)
+  const pos = points.filter((_, i) => labels[i] === 1)
+  const neg = points.filter((_, i) => labels[i] === 0)
+  assert.ok(pos.length >= 1)
+  assert.ok(Math.abs(pos[0].x - 0.5) < 0.06 && Math.abs(pos[0].y - 0.5) < 0.06, JSON.stringify(pos[0]))
+  assert.ok(neg.length >= 4, `fond ${neg.length}`)
+  for (const p of neg) assert.equal(inPolygon(p, lasso), false)
+  for (const p of pos) assert.equal(inPolygon(p, lasso), true)
+})
+
+test('samPrompts : un tracé allongé reçoit deux points pièce', () => {
+  const long = [
+    { x: 0.4, y: 0.05 },
+    { x: 0.6, y: 0.05 },
+    { x: 0.6, y: 0.95 },
+    { x: 0.4, y: 0.95 }
+  ]
+  const { labels } = samPrompts(long, 1)
+  assert.equal(labels.filter((l) => l === 1).length, 2)
+})
+
+test('pickSamMask : préfère la pièce entière au détail et au fond qui déborde', () => {
+  const detail = new Uint8Array(W * H)
+  const whole = new Uint8Array(W * H)
+  const leak = new Uint8Array(W * H).fill(255)
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (x >= 40 && x < 80 && y >= 30 && y < 60) whole[y * W + x] = 255
+      if (x >= 55 && x < 65 && y >= 40 && y < 50) detail[y * W + x] = 255
+    }
+  }
+  const best = pickSamMask([detail, whole, leak], [0.95, 0.9, 0.97], lasso, W, H)
+  assert.equal(best.index, 1)
 })

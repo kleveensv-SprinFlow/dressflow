@@ -47,16 +47,41 @@ const MATTE_ATTEMPTS = [
   { dtype: "fp32", side: 384 },
   { dtype: "fp32", side: 256 }
 ];
-async function segmentSquare(image, crop, progress) {
-  let matte = null;
-  const failures = [];
-  for (const attempt of MATTE_ATTEMPTS) {
+const SAM_ATTEMPTS = ["fp32", "q8"];
+// Le tracé (0..1 dans la zone rognée) sert de consigne à SlimSAM, dans le worker.
+async function samFromLasso(image, crop, lasso, progress, failures) {
+  for (const dtype of SAM_ATTEMPTS) {
     try {
-      const data = await runJob({ kind: "matte", ...attempt }, image, crop, progress);
-      matte = new Uint8Array(data.matte);
-      break;
+      const data = await runJob({ kind: "sam", dtype, lasso }, image, crop, progress);
+      if (!data.matte || data.fill < 0.06) {
+        failures.push(`SlimSAM ${dtype}: rien de net dans le tracé`);
+        return null;
+      }
+      return new Uint8Array(data.matte);
     } catch (error) {
-      failures.push(`${attempt.dtype}@${attempt.side}: ${error.message}`);
+      failures.push(`SlimSAM ${dtype}: ${error.message}`);
+    }
+  }
+  return null;
+}
+async function segmentSquare(image, crop, progress, lasso = null) {
+  let matte = null;
+  let source = null;
+  const failures = [];
+  if (lasso) {
+    matte = await samFromLasso(image, crop, lasso, progress, failures);
+    if (matte) source = "slimsam";
+  }
+  if (!matte) {
+    for (const attempt of MATTE_ATTEMPTS) {
+      try {
+        const data = await runJob({ kind: "matte", ...attempt }, image, crop, progress);
+        matte = new Uint8Array(data.matte);
+        source = "birefnet";
+        break;
+      } catch (error) {
+        failures.push(`${attempt.dtype}@${attempt.side}: ${error.message}`);
+      }
     }
   }
   let classIds = null;
@@ -73,7 +98,8 @@ async function segmentSquare(image, crop, progress) {
     if (!matte) throw new Error(`BiRefNet: ${failures.join(" | ")} // SegFormer: ${error.message}`);
   }
   if (!classIds) classIds = new Uint8Array(width * height);
-  return { classIds, matte, width, height, labels };
+  if (failures.length) console.warn("Détourage :", failures.join(" | "));
+  return { classIds, matte, width, height, labels, source };
 }
 const MODEL_SIDE = 768;
 function drawModelInput(source, width, height) {

@@ -111,17 +111,20 @@ async function ensureSession(file, lasso) {
   const photo = ctx.getImageData(0, 0, workW, workH)
   // La photo est gardée tout de suite : si le modèle échoue, l’éditeur peut quand même l’afficher.
   sessions.set(file, { photo: photo.data, workW, workH, key })
+  const cropLasso = lasso ? lassoToCrop(lasso, box, width, height) : null
   const model = drawModelInput(cropCanvas, cropW, cropH)
-  const seg = await segmentSquare(model.image, model.crop, () => {})
+  // Avec un tracé : SlimSAM suit la consigne (repli BiRefNet). Sans tracé : BiRefNet seul.
+  const seg = await segmentSquare(model.image, model.crop, () => {}, cropLasso)
   const session = {
     photo: photo.data,
     workW,
     workH,
     key,
-    lasso: lasso ? lassoToCrop(lasso, box, width, height) : null,
+    lasso: cropLasso,
     labels: seg.labels,
     classIds: seg.classIds,
     matte: seg.matte,
+    matteSource: seg.source,
     maskW: seg.width,
     maskH: seg.height
   }

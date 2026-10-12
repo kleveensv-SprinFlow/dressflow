@@ -1,4 +1,5 @@
-import { AutoModel, AutoProcessor, env, pipeline, RawImage } from "@huggingface/transformers";
+import { AutoModel, AutoProcessor, env, pipeline, RawImage, SamModel } from "@huggingface/transformers";
+import { exitPoints, lassoRegions, pickSamMask, samPrompts } from "./lasso.js";
 env.allowLocalModels = false;
 if (env.backends?.onnx?.wasm) {
   env.backends.onnx.wasm.numThreads = 1;
@@ -7,7 +8,10 @@ if (env.backends?.onnx?.wasm) {
 let segmenterPromise = null;
 let matterPromise = null;
 let matterDtype = null;
+let samPromise = null;
 const MATTE_ID = "onnx-community/BiRefNet_lite-ONNX";
+// SlimSAM : SAM allégé (~40 Mo), suit les points donnés par le tracé.
+const SAM_ID = "Xenova/slimsam-77-uniform";
 const scope = self;
 function postProgress(status, progress) {
   scope.postMessage({ type: "progress", status, progress });
@@ -86,6 +90,79 @@ async function inferMatte(image, side, dtype) {
   const out = await matter.model({ input_image: pixel_values });
   return maskFromOutput(out.output_image, image.width, image.height);
 }
+function getSam(dtype) {
+  if (!samPromise) {
+    const progress_callback = (update) => {
+      postProgress(update.status ?? "download", update.progress);
+    };
+    samPromise = Promise.all([
+      SamModel.from_pretrained(SAM_ID, { dtype, device: "wasm", progress_callback }),
+      AutoProcessor.from_pretrained(SAM_ID, { progress_callback })
+    ]).then(([model, processor]) => ({ model, processor })).catch((error) => {
+      samPromise = null;
+      throw error;
+    });
+  }
+  return samPromise;
+}
+/**
+ * SlimSAM guidé par le tracé (lasso en 0..1 de la zone utile ox/oy/sw/sh).
+ * L'image est encodée une seule fois, puis le décodeur (rapide) tourne :
+ * 1. avec les points du tracé ;
+ * 2. si le masque sort du tracé (objet voisin collé à la pièce), avec des points « fond » posés sur cette sortie.
+ */
+async function samFromLasso(image, message) {
+  const { ox, oy, sw, sh, lasso } = message;
+  const sam = await getSam(message.dtype);
+  const ip = sam.processor.image_processor ?? sam.processor;
+  const rgb = toRgb(image);
+  const base = await sam.processor(rgb);
+  const embeddings = await sam.model.get_image_embeddings(base);
+  const regions = lassoRegions(lasso, sw, sh);
+  const toPx = (p) => [ox + p.x * sw, oy + p.y * sh];
+
+  async function decode(points, labels) {
+    const input_points = ip.reshape_input_points([[points.map(toPx)]], base.original_sizes, base.reshaped_input_sizes);
+    const input_labels = ip.add_input_labels([[labels]], input_points);
+    const out = await sam.model({ ...embeddings, input_points, input_labels });
+    const [logits] = await ip.post_process_masks(out.pred_masks, base.original_sizes, base.reshaped_input_sizes, {
+      binarize: false
+    });
+    const count = logits.dims[1];
+    const W = image.width;
+    const plane = W * image.height;
+    const src = logits.data;
+    const masks = [];
+    for (let m = 0; m < count; m++) {
+      // Seule la zone utile est gardée ; logit → probabilité adoucie pour le filtre guidé.
+      const mask = new Uint8Array(sw * sh);
+      const off = m * plane;
+      for (let y = 0; y < sh; y++) {
+        const row = off + (oy + y) * W + ox;
+        for (let x = 0; x < sw; x++) mask[y * sw + x] = Math.round(255 / (1 + Math.exp(-src[row + x] * 0.5)));
+      }
+      masks.push(mask);
+    }
+    const scores = Array.from(out.iou_scores.data).slice(0, count);
+    const best = pickSamMask(masks, scores, lasso, sw, sh, regions);
+    return best ? { ...best, mask: masks[best.index] } : null;
+  }
+
+  const prompts = samPrompts(lasso, sw / sh);
+  let best = await decode(prompts.points, prompts.labels);
+  let passes = 1;
+  if (best && best.exit > 0.01) {
+    const extra = exitPoints(best.mask, regions, sw, sh, 3);
+    if (extra.length) {
+      const retry = await decode([...prompts.points, ...extra], [...prompts.labels, ...extra.map(() => 0)]);
+      passes = 2;
+      // On garde la seconde passe si elle sort nettement moins du tracé sans perdre la pièce.
+      if (retry && retry.exit < best.exit * 0.6 && retry.fill >= best.fill * 0.5) best = retry;
+    }
+  }
+  if (!best) return null;
+  return { mask: best.mask, fill: best.fill, exit: best.exit, passes };
+}
 function cropGray(mask, sideW, sideH, ox, oy, sw, sh) {
   const cropped = new Uint8Array(sw * sh);
   const data = mask.data;
@@ -135,6 +212,29 @@ scope.onmessage = async (event) => {
   try {
     const pixels = new Uint8ClampedArray(message.buffer);
     const image = new RawImage(pixels, message.width, message.height, 4);
+    if (message.kind === "sam") {
+      postProgress("segment");
+      const result = await samFromLasso(image, message);
+      if (!result) {
+        scope.postMessage({ type: "result", id: message.id, matte: null });
+        return;
+      }
+      const buffer = result.mask.buffer;
+      scope.postMessage(
+        {
+          type: "result",
+          id: message.id,
+          matte: buffer,
+          width: message.sw,
+          height: message.sh,
+          fill: result.fill,
+          exit: result.exit,
+          passes: result.passes
+        },
+        [buffer]
+      );
+      return;
+    }
     if (message.kind === "matte") {
       postProgress("segment");
       const mask = await inferMatte(image, message.side, message.dtype);

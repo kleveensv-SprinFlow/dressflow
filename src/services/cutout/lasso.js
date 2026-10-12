@@ -71,6 +71,223 @@ export function rasterPolygon(points, w, h) {
   return out
 }
 
+/** Distance (en pixels de grille) de chaque pixel intérieur au bord du masque. Chamfer 3-4. */
+function insideDistance(mask, w, h) {
+  const big = 1e9
+  const d = new Float32Array(w * h)
+  for (let i = 0; i < d.length; i++) d[i] = mask[i] ? big : 0
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      if (!d[i]) continue
+      let v = d[i]
+      if (x > 0) v = Math.min(v, d[i - 1] + 3)
+      else v = Math.min(v, 3)
+      if (y > 0) {
+        v = Math.min(v, d[i - w] + 3)
+        if (x > 0) v = Math.min(v, d[i - w - 1] + 4)
+        if (x < w - 1) v = Math.min(v, d[i - w + 1] + 4)
+      } else v = Math.min(v, 3)
+      d[i] = v
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x
+      if (!d[i]) continue
+      let v = d[i]
+      if (x < w - 1) v = Math.min(v, d[i + 1] + 3)
+      else v = Math.min(v, 3)
+      if (y < h - 1) {
+        v = Math.min(v, d[i + w] + 3)
+        if (x < w - 1) v = Math.min(v, d[i + w + 1] + 4)
+        if (x > 0) v = Math.min(v, d[i + w - 1] + 4)
+      } else v = Math.min(v, 3)
+      d[i] = v
+    }
+  }
+  for (let i = 0; i < d.length; i++) d[i] /= 3
+  return d
+}
+
+/**
+ * Transforme le tracé en consignes pour SlimSAM (le modèle n'accepte que des points).
+ * - points « pièce » (1) : le cœur du tracé, là où le doigt a clairement entouré quelque chose ;
+ * - points « fond » (0) : juste à l'extérieur du tracé, pour dire où la pièce s'arrête.
+ * Retourne des coordonnées 0..1 dans la zone rognée.
+ */
+export function samPrompts(lasso, aspect = 1, maxPositive = 2, maxNegative = 8) {
+  // Grille aux proportions de la zone rognée : les distances sont de vrais pixels.
+  const GW = aspect >= 1 ? 96 : Math.max(12, Math.round(96 * aspect))
+  const GH = aspect >= 1 ? Math.max(12, Math.round(96 / aspect)) : 96
+  const inside = rasterPolygon(lasso, GW, GH)
+  const dist = insideDistance(inside, GW, GH)
+  let best = -1
+  let bestD = 0
+  for (let i = 0; i < dist.length; i++) {
+    if (dist[i] > bestD) {
+      bestD = dist[i]
+      best = i
+    }
+  }
+  const at = (i) => ({ gx: (i % GW) + 0.5, gy: Math.floor(i / GW) + 0.5 })
+  const norm = (g) => ({ x: g.gx / GW, y: g.gy / GH })
+  const positives = []
+  if (best >= 0) {
+    const chosen = [at(best)]
+    // Tracé allongé (pantalon, écharpe) : un second point loin du premier, bien à l'intérieur.
+    while (chosen.length < maxPositive) {
+      let pick = -1
+      let pickScore = 0
+      for (let i = 0; i < dist.length; i++) {
+        if (dist[i] < bestD * 0.6) continue
+        const g = at(i)
+        let near = Infinity
+        for (const c of chosen) near = Math.min(near, Math.hypot(g.gx - c.gx, g.gy - c.gy))
+        if (near > pickScore) {
+          pickScore = near
+          pick = i
+        }
+      }
+      // Seulement si le tracé est nettement plus long que large.
+      if (pick < 0 || pickScore < bestD * 2.2) break
+      chosen.push(at(pick))
+    }
+    for (const c of chosen) positives.push(norm(c))
+  }
+
+  let cx = 0
+  let cy = 0
+  for (const p of lasso) {
+    cx += p.x
+    cy += p.y
+  }
+  cx /= lasso.length || 1
+  cy /= lasso.length || 1
+  const negatives = []
+  const n = lasso.length
+  for (let k = 0; k < maxNegative && n; k++) {
+    const p = lasso[Math.floor((k * n) / maxNegative)]
+    const dx = p.x - cx
+    const dy = p.y - cy
+    const len = Math.hypot(dx, dy) || 1
+    // 4 % de la zone vers l'extérieur : hors du tracé, mais encore dans la photo rognée.
+    const q = { x: p.x + (dx / len) * 0.04, y: p.y + (dy / len) * 0.04 }
+    if (q.x <= 0.005 || q.y <= 0.005 || q.x >= 0.995 || q.y >= 0.995) continue
+    const gx = Math.min(GW - 1, Math.floor(q.x * GW))
+    const gy = Math.min(GH - 1, Math.floor(q.y * GH))
+    if (inside[gy * GW + gx]) continue
+    negatives.push(q)
+  }
+  return {
+    points: [...positives, ...negatives],
+    labels: [...positives.map(() => 1), ...negatives.map(() => 0)]
+  }
+}
+
+/**
+ * Zones utiles autour du tracé (w×h) :
+ * - inside : l'intérieur du tracé ;
+ * - gate : l'intérieur un peu élargi (tolérance d'un tracé grossier) ;
+ * - ring : une bande juste à l'extérieur du tracé. La pièce entourée n'y va pas ;
+ *   un objet voisin coupé par le tracé (télé, bras, meuble) la traverse.
+ */
+export function lassoRegions(lasso, w, h) {
+  const inside = rasterPolygon(lasso, w, h)
+  const gate = dilateBin(inside, w, h, Math.max(2, Math.round(Math.min(w, h) * 0.015)))
+  const grown = dilateBin(inside, w, h, Math.max(3, Math.round(Math.min(w, h) * 0.035)))
+  const ring = new Uint8Array(w * h)
+  let lassoArea = 0
+  let ringArea = 0
+  for (let i = 0; i < inside.length; i++) {
+    lassoArea += inside[i]
+    if (grown[i] && !gate[i]) {
+      ring[i] = 1
+      ringArea++
+    }
+  }
+  return { inside, gate, ring, lassoArea, ringArea }
+}
+
+/**
+ * SlimSAM propose 3 masques (détail, partie, objet entier). On garde celui qui
+ * remplit le mieux le tracé sans en sortir. masks : Uint8Array w×h (0..255).
+ */
+export function pickSamMask(masks, scores, lasso, w, h, regions = lassoRegions(lasso, w, h)) {
+  const { inside, gate, ring, lassoArea, ringArea } = regions
+  if (!lassoArea) return null
+  let best = null
+  for (let m = 0; m < masks.length; m++) {
+    const mask = masks[m]
+    let on = 0
+    let inLasso = 0
+    let outGate = 0
+    let crossing = 0
+    for (let i = 0; i < mask.length; i++) {
+      if (mask[i] <= 127) continue
+      on++
+      if (inside[i]) inLasso++
+      if (!gate[i]) outGate++
+      if (ring[i]) crossing++
+    }
+    if (!on) continue
+    const fill = inLasso / lassoArea
+    const leak = outGate / on
+    const exit = ringArea ? crossing / ringArea : 0
+    // Un tracé grossier contient la pièce + du fond : la pièce occupe souvent 30 à 85 % du tracé.
+    const score =
+      (scores[m] ?? 0) + 0.6 * Math.min(fill, 0.85) - 1.2 * leak - 3 * exit - (fill < 0.12 ? 1 : 0)
+    if (!best || score > best.score) best = { index: m, score, fill, leak, exit }
+  }
+  return best
+}
+
+/**
+ * Où le masque sort du tracé : jusqu'à `max` points bien séparés, juste à l'extérieur du tracé.
+ * Ils tombent sur l'objet voisin, jamais sur la pièce entourée : on les donne à SlimSAM comme « fond ».
+ */
+export function exitPoints(mask, regions, w, h, max = 3) {
+  const hits = []
+  for (let i = 0; i < mask.length; i++) if (mask[i] > 127 && regions.ring[i]) hits.push(i)
+  if (!hits.length) return []
+  const minGap = Math.min(w, h) * 0.12
+  const picked = []
+  // Premier point : le plus central des contacts, puis le plus éloigné des points déjà pris.
+  let sx = 0
+  let sy = 0
+  for (const i of hits) {
+    sx += i % w
+    sy += Math.floor(i / w)
+  }
+  sx /= hits.length
+  sy /= hits.length
+  let first = hits[0]
+  let firstD = Infinity
+  for (const i of hits) {
+    const d = Math.hypot((i % w) - sx, Math.floor(i / w) - sy)
+    if (d < firstD) {
+      firstD = d
+      first = i
+    }
+  }
+  picked.push(first)
+  while (picked.length < max) {
+    let far = -1
+    let farD = 0
+    for (const i of hits) {
+      let near = Infinity
+      for (const j of picked) near = Math.min(near, Math.hypot((i % w) - (j % w), Math.floor(i / w) - Math.floor(j / w)))
+      if (near > farD) {
+        farD = near
+        far = i
+      }
+    }
+    if (far < 0 || farD < minGap) break
+    picked.push(far)
+  }
+  return picked.map((i) => ({ x: ((i % w) + 0.5) / w, y: (Math.floor(i / w) + 0.5) / h }))
+}
+
 function resizeBilinear(src, sw, sh, dw, dh) {
   const out = new Float32Array(dw * dh)
   for (let y = 0; y < dh; y++) {
